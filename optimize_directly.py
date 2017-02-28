@@ -5,7 +5,7 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tf_visqol import TFVisqol
+from tf_visqol import TFVisqol, _DTYPE
 from util import resample
 
 # Unused. FFT is not implemented on the CPU.
@@ -19,26 +19,30 @@ def is_distance(ref_var, deg_var):
 def get_loss(ref_var, deg_var, fs):
   tf_visqol = TFVisqol(fs)
   nsim = tf_visqol.visqol(ref_var, deg_var)
-  sq_loss = tf.reduce_mean(tf.squared_difference(deg_var, ref_var))
+  sq_loss = tf.cast(tf.reduce_mean(tf.squared_difference(deg_var, ref_var)), _DTYPE)
   loss = 0.1*tf.log(sq_loss) - nsim
   minimize_op = tf.train.AdamOptimizer().minimize(loss)
   return loss, minimize_op
 
 def main(argv):
   original, fs_old = soundfile.read("original.wav")
+  opus_output, _ = soundfile.read("low.wav")
 
   fs = 16000
   original = resample(original, fs_old, fs)
-  original = original[16000:32000, 0].astype("float", copy=False).T
+  original = original[:, 0].astype(np.float32, copy=False).reshape(1, -1)
   soundfile.write("original_16k_mono.wav", original.astype(np.float32, copy=False).T, fs, "float")
 
-  n = original.shape[0]
-  ref_var = tf.placeholder(tf.float64, (1, n), name="ref")
+  opus_output = resample(opus_output, fs_old, fs)
+  opus_output = opus_output[:, 0].astype(np.float32, copy=False).reshape(1, -1)
+  soundfile.write("opus_16k_mono.wav", opus_output.astype(np.float32, copy=False).T, fs, "float")
+
+  n = original.size
+  ref_var = tf.placeholder(_DTYPE, (1, n), name="ref")
   deg_var = tf.get_variable(
     "deg_input",
-    shape=(1, n),
-    dtype=tf.float64,
-    initializer=tf.contrib.layers.xavier_initializer())
+    dtype=_DTYPE,
+    initializer=opus_output)
 
   loss_var, minimize_op = get_loss(ref_var, deg_var, fs)
   model = tf.global_variables_initializer()

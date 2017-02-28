@@ -6,14 +6,16 @@ import scipy.ndimage
 from scipy.interpolate import interp2d
 
 
-_BFS = np.asarray(
-  [
+_DTYPE = tf.float32
+
+
+_BFS_ARR = np.asarray([
     50, 150, 250, 350, 450, 570, 700, 840, 1000, 1170, 1370, 1600, 1850, 2150, 2500, 2900,
     3400, 4000, 4800, 6500, 8000
-  ],
-  dtype=np.float64)
+  ])
+_BFS = tf.constant(_BFS_ARR, dtype=_DTYPE)
 
-_NUM_BANDS = len(_BFS)
+_NUM_BANDS = len(_BFS_ARR)
 _PATCH_SIZE = 30
 _PI = np.pi
 _BLOCK_SIZE = 512
@@ -34,26 +36,24 @@ def gga_freq_abs(x, sample_rate, freq):
   # TODO: This is slow. Any way to improve it?
   lx = _BLOCK_SIZE
   pik_term = 2 * _PI * freq / sample_rate
-  cos_pik_term = tf.constant(np.cos(pik_term))
+  cos_pik_term = tf.cos(pik_term)
   cos_pik_term2 = 2 * cos_pik_term
 
-  batch_size = 1
-  s0 = np.zeros((batch_size, len(freq)), dtype=np.float64)
-  s1 = np.zeros((batch_size, len(freq)), dtype=np.float64)
-  s2 = np.zeros((batch_size, len(freq)), dtype=np.float64)
-
   # number of iterations is (by one) less than the length of signal
-  for ind in range(lx - 1):
-    s0 = x[:, ind] + cos_pik_term2 * s1 - s2
+  # Unroll the first two iterations to avoid creating zeros arrays.
+  s2 = s1 = s0 = x[:, 0, None]
+  s1 = s0 = x[:, 1, None] + cos_pik_term2 * s1
+  for ind in range(2, lx - 1):
+    s0 = x[:, ind, None] + cos_pik_term2 * s1 - s2
     s2 = s1
     s1 = s0
 
-  s0 = x[:, lx - 1] + cos_pik_term2 * s1 - s2
+  s0 = x[:, lx - 1, None] + cos_pik_term2 * s1 - s2
 
   # | s0 - s1 exp(-ip) |
   # | s0 - s1 cos(p) + i s1 sin(p)) |
   # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
-  y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * np.sin(pik_term))**2)
+  y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
 
@@ -63,7 +63,7 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
   # TODO: We may need to pad for the last block.
   # TODO: Fix for batches of more than 1.
   x_as_image = tf.expand_dims(tf.expand_dims(x, 1, name="expand_spec"), -1)
-  x_as_image = tf.to_float(x_as_image)
+  x_as_image = tf.cast(x_as_image, tf.float32)
   blocks_raw = tf.extract_image_patches(
     x_as_image,
     ksizes=[1, 1, _BLOCK_SIZE, 1],
@@ -71,17 +71,13 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
     rates=[1, 1, 1, 1],
     padding="VALID")
   blocks = tf.squeeze(blocks_raw, [1])
-  blocks = tf.to_double(blocks)
-
+  blocks = tf.cast(blocks, _DTYPE)
   windows_blocks = window * blocks
 
   # map_fn works along dimension 0.
-  perm = [1, 0, 2]
-  wb_with_blocks_first = tf.transpose(windows_blocks, perm=perm)
-  func = lambda x: gga_freq_abs(x, fs, bfs)
-  S_with_blocks_first = tf.map_fn(func, wb_with_blocks_first)
-  S = tf.transpose(
-    tf.transpose(S_with_blocks_first, perm=tf.invert_permutation(perm)), perm=[0, 2, 1])
+  wb_flat = tf.reshape(windows_blocks, (-1, _BLOCK_SIZE))
+  S_flat = gga_freq_abs(wb_flat, fs, bfs)
+  S = tf.transpose(tf.reshape(S_flat, (batch_size, -1, _NUM_BANDS)), perm=(0, 2, 1))
 
   return S
 
@@ -96,9 +92,9 @@ def filter2(h, X, shape):
   X = tf.expand_dims(X, -1, name="expand_filter")
 
   # TODO Tensorflow doesn't support 64-bit conv.
-  result = tf.nn.conv2d(tf.to_float(X), tf.to_float(h), strides=[1, 1, 1, 1], padding=shape)
+  result = tf.nn.conv2d(tf.cast(X, tf.float32), tf.cast(h, tf.float32), strides=[1, 1, 1, 1], padding=shape)
   result = tf.squeeze(result, [-1])
-  result = tf.to_double(result)
+  result = tf.cast(result, _DTYPE)
   return result
 
 def nsim(neuro_r, neuro_d, L):
@@ -107,17 +103,14 @@ def nsim(neuro_r, neuro_d, L):
                      [0.0838, 0.6193, 0.0838],
                      [0.0113, 0.0838, 0.0113]]).reshape(3, 3, 1, 1)
   window = window / np.sum(window)
-  window = tf.constant(window)
+  window = tf.constant(window, dtype=_DTYPE)
 
   K1 = 0.01
   K2 = 0.03
   C1 = (K1 * L)**2
   C2 = ((K2 * L)**2) / 2
 
-  # Use double precision.
-  neuro_r = tf.to_double(neuro_r)
-  neuro_d = tf.to_double(neuro_d)
-
+  # MATLAB uses double precision, but we can't because conv2d doesn't support it.
   mu_r = filter2(window, neuro_r, 'valid')
   mu_d = filter2(window, neuro_d, 'valid')
   mu_r_sq = tf.square(mu_r)
@@ -148,13 +141,13 @@ class TFVisqol(object):
     window_size = 2 * (window_size // 2)
 
     self._window_overlap = int(window_size / 2)
-    self._window = tf.constant(np.hamming(window_size + 1)[:window_size])
+    self._window = tf.constant(np.hamming(window_size + 1)[:window_size], dtype=_DTYPE)
 
   def visqol_with_session(self, ref, deg):
     with tf.Session() as sess:
       n = ref.shape[0]
-      ref_var = tf.placeholder(tf.float64, (None, n), name="ref")
-      deg_var = tf.placeholder(tf.float64, (None, n), name="deg")
+      ref_var = tf.placeholder(_DTYPE, (None, n), name="ref")
+      deg_var = tf.placeholder(_DTYPE, (None, n), name="deg")
       nsim_var = self.visqol(ref_var, deg_var)
 
       feed_dict = {ref_var: ref.reshape(1, -1), deg_var: deg.reshape(1, -1)}
@@ -183,14 +176,14 @@ class TFVisqol(object):
     return nsim
 
   def _get_sig_spect(self, x):
-    num_blocks = (16000 // self._window_overlap) - 1
+    num_blocks = (tf.shape(x)[1] // self._window_overlap) - 1
     S = spectrogram_abs(x, self._window, self._window_overlap, _BFS, self._fs)
 
     # TODO HACK: This reshape is here because extract_image_patches gradient seems to have a bug.
     #   http://stackoverflow.com/questions/41841713/tensorflow-gradient-unsupported-operand-type
     S = tf.reshape(S, (1, _NUM_BANDS, num_blocks))
 
-    S = tf.maximum(S, tf.constant(1e-20, dtype=np.float64))
+    S = tf.maximum(S, tf.constant(1e-20, dtype=_DTYPE))
     max_S = tf.reduce_max(S)
     S /= max_S
     spec_bf = 20*log10(S)
@@ -202,7 +195,7 @@ class TFVisqol(object):
     begin = int(_PATCH_SIZE / 2) - 1
     img_rsig_trunc = tf.slice(img_sig, begin=[0, 0, begin], size=[-1, -1, -1])
     img_4d = tf.expand_dims(img_rsig_trunc, -1, name="expand_patches")
-    img_4d = tf.to_float(img_4d)
+    img_4d = tf.cast(img_4d, dtype=tf.float32)
     patches = tf.extract_image_patches(
       img_4d,
       ksizes=[1, 1, _PATCH_SIZE, 1],
@@ -210,7 +203,7 @@ class TFVisqol(object):
       rates=[1, 1, 1, 1],
       padding="VALID")
     patches = tf.transpose(patches, perm=[0, 2, 1, 3])
-    patches = tf.to_double(patches)
+    patches = tf.cast(patches, _DTYPE)
 
     return patches
 
@@ -222,7 +215,7 @@ class TFVisqol(object):
     neuro_r = tf.transpose(ref_patches, perm=perm)
     neuro_d = tf.transpose(deg_patches, perm=perm)
 
-    # TODO: We may be able to do this without map_fn by using conv channels.
+    # TODO: Reshape over batch access to avoid map_fn
     func = lambda x: nsim(*tf.unstack(x, num=2, axis=0), L)
     patch_nsim = tf.map_fn(func, tf.stack((neuro_r, neuro_d), axis=1))
     batch_nsim = tf.transpose(patch_nsim, [1, 0])
