@@ -44,18 +44,20 @@ def visqol_with_awgn(x, fs, p):
   with_awgn = x + p * x_pow * np.random.randn(len(x))
   gold = visqol_simple(x, with_awgn, fs)
 
-  tf_visqol = TFVisqol(fs)
-  test = tf_visqol.visqol(x, with_awgn)
+  test = Visqol(fs).visqol(x, with_awgn)
+  test_tf = TFVisqol(fs).visqol_with_session(x, with_awgn)
 
-  return [gold, test]
+  return [gold, test, test_tf]
 
 def main(argv):
   original, fs_old = soundfile.read("original.wav")
 
   fs = 16000
   original = resample(original, fs_old, fs)
+  original = original[16000:32000, :]
 
   noise_powers = np.logspace(-3, 0, 10);
+  # noise_powers = np.logspace(-3, 0, 1);
 
   x = np.squeeze(original[:, 0])
   func = functools.partial(visqol_with_awgn, x, fs)
@@ -63,9 +65,15 @@ def main(argv):
     nsim = np.array(pool.map(func, noise_powers))
   # nsim = np.array(list(map(func, noise_powers)))
 
+  diff = np.abs(nsim[:, 0] - nsim[:, 1])
+  diff_tf = np.abs(nsim[:, 0] - nsim[:, 2])
+
   print(nsim)
+  assert np.all(diff < 1e-3), "Python implementation does not match MATLAB"
+  assert np.all(diff_tf < 1e-3), "Tensorflow implementation does not match MATLAB"
   # plt.plot(noise_powers, nsim)
   # plt.show()
+  print("PASS\n")
 
 
 if __name__ == "__main__":

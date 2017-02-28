@@ -147,7 +147,7 @@ class TFVisqol(object):
     self._window_overlap = window_size / 2
     self._window = tf.constant(np.hamming(window_size + 1)[:window_size])
 
-  def visqol(self, ref, deg):
+  def visqol_with_session(self, ref, deg):
     with tf.Session() as sess, \
          tf.variable_scope("visqol"):
       ref_var, deg_var, nsim_var = self._visqol_op(len(ref))
