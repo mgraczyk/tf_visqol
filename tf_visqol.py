@@ -31,10 +31,11 @@ def gga_freq_abs(x, sample_rate, freq):
 
      x has shape (batch, block)
   """
+  # TODO: This is slow. Any way to improve it?
   lx = _BLOCK_SIZE
   pik_term = 2 * _PI * freq / sample_rate
-  cos_pik_term = np.cos(pik_term)
-  cos_pik_term2 = 2 * np.cos(pik_term)
+  cos_pik_term = tf.constant(np.cos(pik_term))
+  cos_pik_term2 = 2 * cos_pik_term
 
   batch_size = 1
   s0 = np.zeros((batch_size, len(freq)), dtype=np.float64)
@@ -61,7 +62,8 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
 
   # TODO: We may need to pad for the last block.
   # TODO: Fix for batches of more than 1.
-  x_as_image = tf.expand_dims(tf.expand_dims(x, 1), -1)
+  x_as_image = tf.expand_dims(tf.expand_dims(x, 1, name="expand_spec"), -1)
+  x_as_image = tf.to_float(x_as_image)
   blocks_raw = tf.extract_image_patches(
     x_as_image,
     ksizes=[1, 1, _BLOCK_SIZE, 1],
@@ -69,6 +71,7 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
     rates=[1, 1, 1, 1],
     padding="VALID")
   blocks = tf.squeeze(blocks_raw, [1])
+  blocks = tf.to_double(blocks)
 
   windows_blocks = window * blocks
 
@@ -90,7 +93,7 @@ def filter2(h, X, shape):
   # The original performs correlation, this is convolution.
   # The difference doesn't matter because the filter is rotationally symmetric.
 
-  X = tf.expand_dims(X, -1)
+  X = tf.expand_dims(X, -1, name="expand_filter")
 
   # TODO Tensorflow doesn't support 64-bit conv.
   result = tf.nn.conv2d(tf.to_float(X), tf.to_float(h), strides=[1, 1, 1, 1], padding=shape)
@@ -141,26 +144,30 @@ class TFVisqol(object):
       raise NotImplementedError
 
     window_size = _BLOCK_SIZE
-    assert window_size == round((self._fs / 8000) * 256)
+    assert window_size == round((self._fs / 8000) * (_BLOCK_SIZE/2))
     window_size = 2 * (window_size // 2)
 
-    self._window_overlap = window_size / 2
+    self._window_overlap = int(window_size / 2)
     self._window = tf.constant(np.hamming(window_size + 1)[:window_size])
 
   def visqol_with_session(self, ref, deg):
-    with tf.Session() as sess, \
-         tf.variable_scope("visqol"):
-      ref_var, deg_var, nsim_var = self._visqol_op(len(ref))
+    with tf.Session() as sess:
+      n = ref.shape[0]
+      ref_var = tf.placeholder(tf.float64, (None, n), name="ref")
+      deg_var = tf.placeholder(tf.float64, (None, n), name="deg")
+      nsim_var = self.visqol(ref_var, deg_var)
 
       feed_dict = {ref_var: ref.reshape(1, -1), deg_var: deg.reshape(1, -1)}
       nsim = sess.run(nsim_var, feed_dict)
       return nsim[0]
 
-  def _visqol_op(self, n):
-    ref = tf.placeholder(tf.float64, (None, n,), name="ref")
-    deg = tf.placeholder(tf.float64, (None, n,), name="deg")
+  def visqol(self, ref_var, deg_var):
+    # TODO: How are we supposed to specify a variable that may or may not receive a feed?
+    with tf.variable_scope("visqol", reuse=True):
+      nsim_var = self._visqol_op(ref_var, deg_var)
+      return nsim_var
 
-    # Images have shape (batch,
+  def _visqol_op(self, ref, deg):
     img_rsig = tf.identity(self._get_sig_spect(ref), name="img_rsig")
     img_dsig = tf.identity(self._get_sig_spect(deg), name="img_dsig")
 
@@ -173,10 +180,15 @@ class TFVisqol(object):
     deg_patches = tf.identity(self.create_patches(img_dsig), name="deg_patches")
     nsim = self.calc_patch_similarity(ref_patches, deg_patches, L)
 
-    return ref, deg, nsim
+    return nsim
 
   def _get_sig_spect(self, x):
+    num_blocks = (16000 // self._window_overlap) - 1
     S = spectrogram_abs(x, self._window, self._window_overlap, _BFS, self._fs)
+
+    # TODO HACK: This reshape is here because extract_image_patches gradient seems to have a bug.
+    #   http://stackoverflow.com/questions/41841713/tensorflow-gradient-unsupported-operand-type
+    S = tf.reshape(S, (1, _NUM_BANDS, num_blocks))
 
     S = tf.maximum(S, tf.constant(1e-20, dtype=np.float64))
     max_S = tf.reduce_max(S)
@@ -184,11 +196,13 @@ class TFVisqol(object):
     spec_bf = 20*log10(S)
     return spec_bf
 
-  def create_patches(self, img_rsig):
+  def create_patches(self, img_sig):
     # TODO: This slice is done in the MATLAB, but seems dumb.
+    original_num_blocks = tf.shape(img_sig)[2]
     begin = int(_PATCH_SIZE / 2) - 1
-    img_rsig = tf.slice(img_rsig, begin=[0, 0, begin], size=[-1, -1, -1])
-    img_4d = tf.expand_dims(img_rsig, -1)
+    img_rsig_trunc = tf.slice(img_sig, begin=[0, 0, begin], size=[-1, -1, -1])
+    img_4d = tf.expand_dims(img_rsig_trunc, -1, name="expand_patches")
+    img_4d = tf.to_float(img_4d)
     patches = tf.extract_image_patches(
       img_4d,
       ksizes=[1, 1, _PATCH_SIZE, 1],
@@ -196,6 +210,7 @@ class TFVisqol(object):
       rates=[1, 1, 1, 1],
       padding="VALID")
     patches = tf.transpose(patches, perm=[0, 2, 1, 3])
+    patches = tf.to_double(patches)
 
     return patches
 
