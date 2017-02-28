@@ -11,6 +11,7 @@ from multiprocessing import Pool
 import matplotlib
 from matplotlib import pyplot as plt
 
+from visqol import Visqol
 from tf_visqol import TFVisqol
 
 
