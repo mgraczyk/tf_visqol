@@ -2,6 +2,7 @@ import os
 import numpy as np
 import soundfile
 import subprocess
+from contextlib import ExitStack
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from atomicwrites import AtomicWriter
@@ -69,3 +70,10 @@ def opus_transcode(input_path, output_path, bitrate=2):
 def awgn_at_signal_level(x, p):
   x_pow = np.sqrt(np.mean(x**2))
   return p * x_pow * np.random.randn(len(x))
+
+def squishyball(fs, *signals):
+  with ExitStack() as stack:
+    temp_files = [stack.enter_context(NamedTemporaryFile(suffix=".wav")) for _ in signals]
+    for s, tf in zip(signals, temp_files):
+      soundfile.write(tf.name, s, fs, format="wav", subtype="float")
+    subprocess.check_call(["squishyball"] + [tf.name for tf in temp_files])
