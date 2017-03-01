@@ -116,7 +116,8 @@ if speechFlag==1
             keepidx(i)=true;
         end
     end
-    
+
+    keepidx = logical(keepidx);
     patches=patches(keepidx,:);
     refPatchIdxs=refPatchIdxs(keepidx);
 end
@@ -498,7 +499,7 @@ function [mNSIM, nmap] =nsim(neuro_r, neuro_d,L,speechFlag)
     
     %for speech just use a simple mean of the similarity map
     if speechFlag==true
-        mNSIM =mean2(nmap);
+        mNSIM =mean(nmap(:));
     else
 
     %for audio, handle LP filter issues of perfect simility for low bands
