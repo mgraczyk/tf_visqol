@@ -84,7 +84,7 @@ def main(argv):
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
 
-  saver = tf.train.Saver()
+  saver = tf.train.Saver(tf.trainable_variables())
 
   with tf.Session() as sess:
     # Initialize init_op_new.
