@@ -7,6 +7,9 @@ import threading
 import json
 import tensorflow as tf
 import numpy as np
+from itertools import count
+from uuid import uuid4
+from pathlib import Path
 from queue import Queue
 from tqdm import tqdm
 
@@ -61,6 +64,9 @@ def get_arg_parser():
   return parser
 
 def main(argv):
+  training_id = uuid4()
+  logger.info("Training with id {}".format(training_id))
+
   opts = get_arg_parser().parse_args(argv[1:])
   index = load_index(opts.index_path)
   block_size = index["block_size"]
@@ -79,18 +85,27 @@ def main(argv):
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
 
+  saver = tf.train.Saver()
+
   with tf.Session() as sess:
     # Initialize init_op_new.
     logger.info("Initializing")
     sess.run(init_op_old)
     sess.run(init_op_new)
 
-    for i in range(1000):
+    for i in count():
       logger.info("Running batch {}".format(i))
       ref_batch, deg_batch = train_data_queue.get()
       feed_dict = {ref_var: ref_batch, deg_var: deg_batch}
       _, loss = sess.run([minimize_op, loss_var], feed_dict)
       logger.info("Loss is {}".format(loss))
+
+      if i > 0 and i % 100 == 0:
+        checkpoint_path = "model_checkpoint/{}/{}.ckpt".format(training_id, i)
+        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+        save_path = saver.save(sess, checkpoint_path)
+        logger.info("Saved model to {}".format(save_path))
+
 
 if __name__ == "__main__":
   main(sys.argv)

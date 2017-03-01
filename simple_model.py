@@ -9,7 +9,7 @@ def get_loss(ref_var, deg_var, fs, n_samples):
     tf_visqol = TFVisqol(fs)
     nsim = tf_visqol.visqol(ref_var, deg_var, n_samples)
     sq_loss = tf.cast(tf.reduce_mean(tf.squared_difference(deg_var, ref_var)), _DTYPE)
-    loss = 0.1*tf.log(sq_loss) - nsim
+    loss = 0.1*tf.log(sq_loss) - tf.reduce_mean(nsim)
     minimize_op = tf.train.AdamOptimizer().minimize(loss)
     return loss, minimize_op
 
