@@ -58,7 +58,7 @@ def main(argv):
       _, loss = sess.run([minimize_op, loss_var], feed_dict)
       print(loss)
 
-      if i > 0 and i % 10 == 0:
+      if i > 0 and i % 100 == 0:
         try:
           deg = sess.run(deg_var)
           soundfile.write("./test_deg_{}.wav".format(i), deg.astype(np.float32, copy=False).T, fs, 'float')

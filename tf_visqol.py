@@ -58,10 +58,7 @@ def gga_freq_abs(x, sample_rate, freq):
 
 
 def spectrogram_abs(x, window, window_overlap, bfs, fs):
-  batch_size = 1
-
   # TODO: We may need to pad for the last block.
-  # TODO: Fix for batches of more than 1.
   x_as_image = tf.expand_dims(tf.expand_dims(x, 1, name="expand_spec"), -1)
   x_as_image = tf.cast(x_as_image, tf.float32)
   blocks_raw = tf.extract_image_patches(
@@ -74,10 +71,9 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
   blocks = tf.cast(blocks, _DTYPE)
   windows_blocks = window * blocks
 
-  # map_fn works along dimension 0.
   wb_flat = tf.reshape(windows_blocks, (-1, _BLOCK_SIZE))
   S_flat = gga_freq_abs(wb_flat, fs, bfs)
-  S = tf.transpose(tf.reshape(S_flat, (batch_size, -1, _NUM_BANDS)), perm=(0, 2, 1))
+  S = tf.transpose(tf.reshape(S_flat, (tf.shape(x)[0], -1, _NUM_BANDS)), perm=(0, 2, 1))
 
   return S
 
@@ -145,14 +141,13 @@ class TFVisqol(object):
 
   def visqol_with_session(self, ref, deg):
     with tf.Session() as sess:
-      n = ref.shape[0]
-      ref_var = tf.placeholder(_DTYPE, (None, n), name="ref")
-      deg_var = tf.placeholder(_DTYPE, (None, n), name="deg")
+      ref_var = tf.placeholder(_DTYPE, (None, None), name="ref")
+      deg_var = tf.placeholder(_DTYPE, (None, None), name="deg")
       nsim_var = self.visqol(ref_var, deg_var)
 
-      feed_dict = {ref_var: ref.reshape(1, -1), deg_var: deg.reshape(1, -1)}
+      feed_dict = {ref_var: ref, deg_var: deg}
       nsim = sess.run(nsim_var, feed_dict)
-      return nsim[0]
+      return nsim
 
   def visqol(self, ref_var, deg_var):
     # TODO: How are we supposed to specify a variable that may or may not receive a feed?
@@ -161,6 +156,8 @@ class TFVisqol(object):
       return nsim_var
 
   def _visqol_op(self, ref, deg):
+    tf.assert_equal(tf.shape(ref), tf.shape(deg))
+
     img_rsig = tf.identity(self._get_sig_spect(ref), name="img_rsig")
     img_dsig = tf.identity(self._get_sig_spect(deg), name="img_dsig")
 
@@ -181,7 +178,7 @@ class TFVisqol(object):
 
     # TODO HACK: This reshape is here because extract_image_patches gradient seems to have a bug.
     #   http://stackoverflow.com/questions/41841713/tensorflow-gradient-unsupported-operand-type
-    S = tf.reshape(S, (1, _NUM_BANDS, num_blocks))
+    S = tf.reshape(S, (tf.shape(x)[0], _NUM_BANDS, num_blocks))
 
     S = tf.maximum(S, tf.constant(1e-20, dtype=_DTYPE))
     max_S = tf.reduce_max(S)
@@ -210,17 +207,11 @@ class TFVisqol(object):
 
   def calc_patch_similarity(self, ref_patches, deg_patches, L):
     # Patches have shape (batch, patch_idx, freq, patch)
-    # map_fn works along dimension 0, so put patch dimension there.
-    perm = [1, 0, 2, 3]
-    neuro_r = tf.transpose(ref_patches, perm=perm)
-    neuro_d = tf.transpose(deg_patches, perm=perm)
+    ref_flat = tf.reshape(ref_patches, (-1, _NUM_BANDS, _PATCH_SIZE))
+    deg_flat = tf.reshape(deg_patches, (-1, _NUM_BANDS, _PATCH_SIZE))
+    nsim_flat = nsim(ref_flat, deg_flat, L)
 
-    # TODO: Reshape over batch access to avoid map_fn
-    func = lambda x: nsim(*tf.unstack(x, num=2, axis=0), L)
-    patch_nsim = tf.map_fn(func, tf.stack((neuro_r, neuro_d), axis=1))
-    batch_nsim = tf.transpose(patch_nsim, [1, 0])
-
-    # TODO(mgraczyk): Preserve batch axis.
+    batch_nsim = tf.reshape(nsim_flat, (-1, tf.shape(ref_patches)[1]))
     vnsim = tf.reduce_mean(batch_nsim, axis=[1])
     return vnsim
 
