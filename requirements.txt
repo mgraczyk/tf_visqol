@@ -1,5 +1,6 @@
 soundfile
 tensorflow
+tensorflow-gpu
 tqdm
 atomicwrites
 numpy
