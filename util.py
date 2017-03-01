@@ -2,6 +2,7 @@ import os
 import numpy as np
 import soundfile
 import subprocess
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from atomicwrites import AtomicWriter
 
@@ -17,6 +18,16 @@ def atomic_write_on_tmp(path, **kwargs):
   writer = AtomicWriter(path, **kwargs)
   return writer._open(lambda: writer.get_fileobject(dir=get_tmpdir_on_same_fs(path)))
 
+
+def get_top_level_path(data_path, subdir, input_path):
+  rest = Path(input_path).relative_to(data_path)
+  return str(Path(data_path, subdir, *rest.parts[1:]))
+
+def get_reference_path(data_path, input_path):
+  return get_top_level_path(data_path, "mono_16k_reference", input_path)
+
+def get_opus_path(data_path, input_path):
+  return get_top_level_path(data_path, "mono_16k_opus_low", input_path)
 
 def resample(original, fs_old, fs_new):
   with NamedTemporaryFile(suffix=".wav") as f_in, \
