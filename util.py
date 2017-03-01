@@ -57,12 +57,14 @@ def opus_transcode(input_path, output_path, bitrate=2):
   with atomic_write_on_tmp(output_path, overwrite=True) as output_f, \
        NamedTemporaryFile() as opus_file:
     # Create Opus encoded audio.
-    subprocess.check_call(
-      ["opusenc", "--quiet", "--bitrate", str(bitrate), input_path, opus_file.name])
+    subprocess.check_call([
+      "opusenc", "--quiet", "--max-delay", "0", "--padding", "0", "--bitrate",
+      str(bitrate), input_path, opus_file.name
+    ])
 
     # Decode back to WAV.
     subprocess.check_call(
-      ["opusdec", "--quiet", "--force-wav", opus_file.name, output_f.name])
+      ["opusdec", "--quiet", "--float", "--force-wav", opus_file.name, output_f.name])
 
 def awgn_at_signal_level(x, p):
   x_pow = np.sqrt(np.mean(x**2))
