@@ -18,7 +18,7 @@ from logger import logger
 
 _FS = 16000
 
-def get_info_for_path(data_path, input_path, block_size, overlap):
+def _get_info_for_path(data_path, input_path, block_size, overlap):
   reference_path = get_reference_path(data_path, input_path)
   opus_path = get_opus_path(data_path, input_path)
   if not (Path(reference_path).exists() and Path(opus_path).exists()):
@@ -55,12 +55,12 @@ def get_info_for_path(data_path, input_path, block_size, overlap):
   } for start in range(0, num_frames - block_size + 1, overlap)]
 
 
-def get_info_for_paths(data_path, input_paths, block_size, overlap):
+def _get_info_for_paths(data_path, input_paths, block_size, overlap):
   successes = 0
   infos = []
   with ThreadPoolExecutor(max_workers=4) as executor:
     future_to_args = {
-      executor.submit(get_info_for_path, data_path, p, block_size, overlap): p
+      executor.submit(_get_info_for_path, data_path, p, block_size, overlap): p
       for p in input_paths
     }
     for future in tqdm(concurrent.futures.as_completed(future_to_args)):
@@ -107,21 +107,26 @@ def get_arg_parser():
 
 
 def main(argv):
-  parser = get_arg_parser()
-  opts = parser.parse_args(argv[1:])
+  opts = get_arg_parser().parse_args(argv[1:])
 
   original_paths = glob.glob("{}/original/**/*.wav".format(opts.data_path), recursive=True)
-  info_for_paths, successes = get_info_for_paths(opts.data_path, original_paths,
-                                                 opts.block_size, opts.overlap)
+  info_for_paths, successes = _get_info_for_paths(opts.data_path, original_paths,
+                                                  opts.block_size, opts.overlap)
+  index = {
+    "count": len(info_for_paths),
+    "block_size": opts.block_size,
+    "overlap": opts.overlap,
+    "infos": info_for_paths
+  }
 
   index_path = str(Path(opts.data_path, opts.index_name + ".json.gz"))
   logger.info("Writing index to {}".format(index_path))
   with atomic_write_on_tmp(index_path, overwrite=True) as f:
     with gzip.open(f.name, "wt") as gz_f:
-      json.dump(info_for_paths, gz_f)
+      json.dump(index, gz_f)
 
   logger.info("Processed {} examples from {} files with {} inputs".format(
-    len(info_for_paths), successes, len(original_paths)))
+    len(index["infos"]), successes, len(original_paths)))
 
 if __name__ == "__main__":
   main(sys.argv)
