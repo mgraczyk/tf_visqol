@@ -149,17 +149,19 @@ class TFVisqol(object):
       nsim = sess.run(nsim_var, feed_dict)
       return nsim
 
-  def visqol(self, ref_var, deg_var):
+  def visqol(self, ref_var, deg_var, n_samples):
+    # TODO HACK: We pass n_samples here because of a problem with the image patch gradient.
     # TODO: How are we supposed to specify a variable that may or may not receive a feed?
     with tf.variable_scope("visqol", reuse=True):
-      nsim_var = self._visqol_op(ref_var, deg_var)
+      nsim_var = self._visqol_op(ref_var, deg_var, n_samples)
       return nsim_var
 
-  def _visqol_op(self, ref, deg):
+  def _visqol_op(self, ref, deg, n_samples):
     tf.assert_equal(tf.shape(ref), tf.shape(deg))
 
-    img_rsig = tf.identity(self._get_sig_spect(ref), name="img_rsig")
-    img_dsig = tf.identity(self._get_sig_spect(deg), name="img_dsig")
+    num_blocks = (n_samples // self._window_overlap) - 1
+    img_rsig = tf.identity(self._get_sig_spect(ref, num_blocks), name="img_rsig")
+    img_dsig = tf.identity(self._get_sig_spect(deg, num_blocks), name="img_dsig")
 
     lowfloor = tf.reduce_min(img_rsig)
     img_rsig = img_rsig - lowfloor
@@ -172,8 +174,7 @@ class TFVisqol(object):
 
     return nsim
 
-  def _get_sig_spect(self, x):
-    num_blocks = (tf.shape(x)[1] // self._window_overlap) - 1
+  def _get_sig_spect(self, x, num_blocks):
     S = spectrogram_abs(x, self._window, self._window_overlap, _BFS, self._fs)
 
     # TODO HACK: This reshape is here because extract_image_patches gradient seems to have a bug.
