@@ -6,9 +6,16 @@ from tempfile import NamedTemporaryFile
 from atomicwrites import AtomicWriter
 
 
+def get_tmpdir_on_same_fs(path):
+  if path.startswith("/mnt"):
+    return "/mnt/tmp"
+  else:
+    return "/tmp"
+
+
 def atomic_write_on_tmp(path, **kwargs):
   writer = AtomicWriter(path, **kwargs)
-  return writer._open(lambda: writer.get_fileobject(dir="/tmp"))
+  return writer._open(lambda: writer.get_fileobject(dir=get_tmpdir_on_same_fs(path)))
 
 
 def resample(original, fs_old, fs_new):
