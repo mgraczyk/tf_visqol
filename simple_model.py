@@ -10,8 +10,12 @@ def get_loss(ref_var, deg_var, fs, n_samples):
     nsim = tf_visqol.visqol(ref_var, deg_var, n_samples)
     sq_loss = tf.cast(tf.reduce_mean(tf.squared_difference(deg_var, ref_var)), _DTYPE)
     loss = 0.1*tf.log(sq_loss) - tf.reduce_mean(nsim)
+    return loss
+
+def get_minimize_op(loss):
+  with tf.variable_scope("minimizer"):
     minimize_op = tf.train.AdamOptimizer().minimize(loss)
-    return loss, minimize_op
+    return minimize_op
 
 def _dense(layer_input, num_outputs):
   block_size = tf.shape(layer_input)[1]

@@ -11,11 +11,9 @@ from itertools import count
 from uuid import uuid4
 from pathlib import Path
 from queue import Queue
-from tqdm import tqdm
 
-from tf_visqol import TFVisqol, _DTYPE
-from simple_model import get_simple_model, get_loss
-from util import resample
+from tf_visqol import _DTYPE
+from simple_model import get_simple_model, get_loss, get_minimize_op
 from logger import logger
 
 _RANDOM_SEED = 42
@@ -69,7 +67,6 @@ def main(argv):
 
   opts = get_arg_parser().parse_args(argv[1:])
   index = load_index(opts.index_path)
-  block_size = index["block_size"]
 
   logger.info("Starting 1 data thread")
   train_data_queue = Queue(32)
@@ -77,11 +74,13 @@ def main(argv):
   data_thread.start()
 
   logger.info("Building model")
+  block_size = index["block_size"]
   ref_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="ref")
   deg_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="deg")
 
-  filter_output = get_simple_model(deg_var, block_size)
-  loss_var, minimize_op = get_loss(ref_var, filter_output, _FS, block_size)
+  filter_output_var = get_simple_model(deg_var, block_size)
+  loss_var = get_loss(ref_var, filter_output_var, _FS, block_size)
+  minimize_op = get_minimize_op(loss_var)
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
 
@@ -94,13 +93,15 @@ def main(argv):
     sess.run(init_op_new)
 
     for i in count():
-      logger.info("Running batch {}".format(i))
+      logger.info("Getting data for {}".format(i))
       ref_batch, deg_batch = train_data_queue.get()
       feed_dict = {ref_var: ref_batch, deg_var: deg_batch}
+
+      logger.info("Running batch {}".format(i))
       _, loss = sess.run([minimize_op, loss_var], feed_dict)
       logger.info("Loss is {}".format(loss))
 
-      if i > 0 and i % 100 == 0:
+      if i > 0 and i % 10 == 0:
         checkpoint_path = "model_checkpoint/{}/{}.ckpt".format(training_id, i)
         Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
         save_path = saver.save(sess, checkpoint_path)
