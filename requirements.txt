@@ -4,3 +4,4 @@ tqdm
 atomicwrites
 numpy
 awscli
+scipy
