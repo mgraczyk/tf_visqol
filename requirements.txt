@@ -3,3 +3,4 @@ tensorflow
 tqdm
 atomicwrites
 numpy
+awscli
