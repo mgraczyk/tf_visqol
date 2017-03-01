@@ -1,7 +1,14 @@
+import os
 import numpy as np
 import soundfile
-from tempfile import NamedTemporaryFile
 import subprocess
+from tempfile import NamedTemporaryFile
+from atomicwrites import AtomicWriter
+
+
+def atomic_write_on_tmp(path, **kwargs):
+  writer = AtomicWriter(path, **kwargs)
+  return writer._open(lambda: writer.get_fileobject(dir="/tmp"))
 
 
 def resample(original, fs_old, fs_new):
@@ -11,7 +18,8 @@ def resample(original, fs_old, fs_new):
     f_in.flush()
 
     # Use R to seed the resample dither rng.
-    subprocess.check_call(("sox", "-R", f_in.name, "-r", str(fs_new), f_out.name))
+    # Scale with -v to avoid clipping.
+    subprocess.check_call(("sox", "-v", str(63/64), "-R", f_in.name, "-r", str(fs_new), f_out.name))
     resampled, new_fs = soundfile.read(f_out.name)
     assert new_fs == fs_new
     return resampled
@@ -26,6 +34,17 @@ def visqol_matlab(ref, deg, fs):
     args = ("./visqol", f_ref.name, f_deg.name)
     output = subprocess.check_output(args, cwd=".")
     return float(output)
+
+def opus_transcode(input_path, output_path, bitrate=2):
+  with atomic_write_on_tmp(output_path, overwrite=True) as output_f, \
+       NamedTemporaryFile() as opus_file:
+    # Create Opus encoded audio.
+    subprocess.check_call(
+      ["opusenc", "--quiet", "--bitrate", str(bitrate), input_path, opus_file.name])
+
+    # Decode back to WAV.
+    subprocess.check_call(
+      ["opusdec", "--quiet", "--force-wav", opus_file.name, output_f.name])
 
 def awgn_at_signal_level(x, p):
   x_pow = np.sqrt(np.mean(x**2))

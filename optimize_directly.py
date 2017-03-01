@@ -8,13 +8,6 @@ from tqdm import tqdm
 from tf_visqol import TFVisqol, _DTYPE
 from util import resample
 
-# Unused. FFT is not implemented on the CPU.
-def is_distance(ref_var, deg_var):
-  ref_spec = tf.abs(tf.fft(tf.complex(tf.to_float(ref_var), imag=tf.constant(0, dtype=tf.float32))))
-  deg_spec = tf.abs(tf.fft(tf.complex(tf.to_float(deg_var), imag=tf.constant(0, dtype=tf.float32))))
-  ratio = ref_spec / deg_spec
-  is_distance = tf.reduce_sum(ratio - tf.log(ratio) - 1, axis=[1])
-  return tf.to_double(is_distance)
 
 def get_loss(ref_var, deg_var, fs):
   tf_visqol = TFVisqol(fs)
