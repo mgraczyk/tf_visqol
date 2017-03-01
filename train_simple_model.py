@@ -23,7 +23,7 @@ _BATCH_SIZE = 64
 _FS = 16000
 
 def load_index(index_path):
-  with gzip.open(index_path) as gz_f:
+  with gzip.open(index_path, "rt") as gz_f:
     return json.load(gz_f)
 
 def load_data_forever(index, train_data_queue):
