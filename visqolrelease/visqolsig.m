@@ -104,7 +104,7 @@ function [moslqo, vnsim, debugInfo ]=visqolsig(refSig, degSig, fs,bandFlag,plotF
 
 if speechFlag==1
 
-    %keepidx= voiceDetector(patches); % Intensity threshold VAD
+    keepidx= voiceDetector(patches); % Intensity threshold VAD
     
     % Alternative VAD
    vadmask=visqolvad(refSig,fs);
