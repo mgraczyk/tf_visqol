@@ -29,14 +29,21 @@ def main(argv):
   np.random.seed(1)
   with_awgn = np.stack([original + awgn_at_signal_level(original, p) for p in noise_powers])
 
-  print("Running MATLAB")
-  func = functools.partial(visqol_matlab_reordered, original, fs)
-  with Pool(processes=4) as pool:
-    gold = np.array(pool.map(func, with_awgn))
-
   print("Running Tensorflow")
-  test = TFVisqol(fs).visqol_with_session(
-    np.broadcast_to(original, (with_awgn.shape[0], original.shape[0])), with_awgn)
+  test = TFVisqol(fs).visqol_with_session( np.broadcast_to(original, (with_awgn.shape[0], original.shape[0])), with_awgn)
+
+  use_precomputed_gold = True
+  if use_precomputed_gold:
+    print("Using precomputed golden value")
+    gold = [
+      0.996206, 0.987429, 0.970375, 0.932609, 0.875888, 0.810587, 0.737579, 0.666732,
+      0.582871, 0.521061
+    ]
+  else:
+    print("Running MATLAB")
+    func = functools.partial(visqol_matlab_reordered, original, fs)
+    with Pool(processes=4) as pool:
+      gold = np.array(pool.map(func, with_awgn))
 
   diff = np.abs(gold - test)
 

@@ -36,12 +36,13 @@ def gga_freq_abs(x, sample_rate, freq):
   cos_pik_term = np.cos(pik_term)
   cos_pik_term2 = 2 * np.cos(pik_term)
 
-  s0 = np.zeros(len(freq), dtype=np.float64)
-  s1 = np.zeros(len(freq), dtype=np.float64)
-  s2 = np.zeros(len(freq), dtype=np.float64)
-
   # number of iterations is (by one) less than the length of signal
-  for ind in range(lx - 1):
+  # Pipeline the first two iterations.
+  s1 = x[0]
+  s0 = x[1] + cos_pik_term2 * s1
+  s2 = s1
+  s1 = s0
+  for ind in range(2, lx - 1):
     s0 = x[ind] + cos_pik_term2 * s1 - s2
     s2 = s1
     s1 = s0
@@ -52,6 +53,7 @@ def gga_freq_abs(x, sample_rate, freq):
   # | s0 - s1 cos(p) + i s1 sin(p)) |
   # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
   y = np.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * np.sin(pik_term))**2)
+  # y = np.sqrt(s0**2 + s1**2 - s0*s1*cos_pik_term2)
   return y
 
 

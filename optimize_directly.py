@@ -18,6 +18,7 @@ def get_loss(ref_var, deg_var, fs, n_samples):
   minimize_op = tf.train.AdamOptimizer().minimize(loss)
   return loss, minimize_op
 
+
 def main(argv):
   original, original_fs = soundfile.read("original.wav")
   original_mono = original[:, 0] if len(original.shape) > 1 else original

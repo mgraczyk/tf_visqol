@@ -20,37 +20,6 @@ from logger import logger
 _FS = 16000
 _BATCH_SIZE = 1
 
-def load_index(index_path):
-  with gzip.open(index_path) as gz_f:
-    return json.load(gz_f)
-
-def load_data_forever(index, train_data_queue):
-  num_infos = index["count"]
-  infos = index["infos"]
-  assert num_infos <= len(infos)
-
-  block_size = index["block_size"]
-  while True:
-    data_indices = np.random.choice(num_infos, size=_BATCH_SIZE, replace=False)
-    ref_batch = np.empty((_BATCH_SIZE, block_size), dtype=np.float32)
-    deg_batch = np.empty((_BATCH_SIZE, block_size), dtype=np.float32)
-
-    for i, data_idx in enumerate(data_indices):
-      info = infos[data_idx]
-      start = info["start"]
-      length = info["length"]
-
-      with soundfile.SoundFile(info["ref"]) as ref_sf:
-        ref_sf.seek(start)
-        ref_sf.read(frames=length, dtype=np.float32, out=ref_batch[i])
-
-      with soundfile.SoundFile(info["deg"]) as deg_sf:
-        deg_sf.seek(start)
-        deg_sf.read(frames=length, dtype=np.float32, out=deg_batch[i])
-
-    train_data_queue.put((ref_batch, deg_batch))
-
-
 def get_arg_parser():
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument(

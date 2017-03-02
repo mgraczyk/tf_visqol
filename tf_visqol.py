@@ -1,9 +1,6 @@
-import math
 import numpy as np
 import tensorflow as tf
-import scipy
-import scipy.ndimage
-from scipy.interpolate import interp2d
+import functools
 
 
 _DTYPE = tf.float32
@@ -20,6 +17,19 @@ _PATCH_SIZE = 30
 _PI = np.pi
 _BLOCK_SIZE = 512
 
+
+def define_scope(function, scope=None, *args, **kwargs):
+  """args and kwargs are passed to variable_scope."""
+  scope = scope or function.__name__
+  vs_args = args
+  vs_kwargs = kwargs
+  @functools.wraps(function)
+  def decorator(*args, **kwargs):
+    with tf.variable_scope(scope, *vs_args, **vs_kwargs):
+      return function(*args, **kwargs)
+  return decorator
+
+
 def log10(x):
   numerator = tf.log(x)
   denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
@@ -27,6 +37,7 @@ def log10(x):
 
 # Adapted from
 #   http://www.mathworks.com/matlabcentral/fileexchange/35103-generalized-goertzel-algorithm/content/goertzel_general_shortened.m
+@define_scope
 def gga_freq_abs(x, sample_rate, freq):
   """Computes the magnitude of the time domain signal x at each frequency in freq using
      the generalized Goertzel algorithm.
@@ -39,24 +50,47 @@ def gga_freq_abs(x, sample_rate, freq):
   cos_pik_term = tf.cos(pik_term)
   cos_pik_term2 = 2 * cos_pik_term
 
-  # number of iterations is (by one) less than the length of signal
-  # Unroll the first two iterations to avoid creating zeros arrays.
-  s2 = s1 = s0 = x[:, 0, None]
-  s1 = s0 = x[:, 1, None] + cos_pik_term2 * s1
-  for ind in range(2, lx - 1):
-    s0 = x[:, ind, None] + cos_pik_term2 * s1 - s2
-    s2 = s1
-    s1 = s0
+  # TODO: Maybe if we make these states into proper variables and assign to them,
+  #       we will use less memory.
+  # Use tf.zeros because zeros_initializer doesn't seem to work in tf 1.0.
+  shape = (x.get_shape()[0], _NUM_BANDS)
+  s0 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
+  s1 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
+  s2 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
 
+  # number of iterations is (by one) less than the length of signal
+  # Pipeline the first two iterations.
+  s1 = tf.assign(s1, tf.tile(x[:, 0, None], (1, _NUM_BANDS)))
+  s0 = tf.assign(s0, x[:, 1, None] + cos_pik_term2 * s1)
+  s2 = tf.assign(s2, s1)
+  s1 = tf.assign(s1, s0)
+
+  for ind in range(2, lx - 1):
+    s0 = tf.assign(s0, x[:, ind, None] + cos_pik_term2 * s1 - s2)
+
+    # We have to tell tensorflow explicitly that the above assignment to s0 happens before the
+    # following assignments.
+    with tf.control_dependencies([s0]):
+      s2 = tf.assign(s2, s1)
+    with tf.control_dependencies([s2]):
+      s1 = tf.assign(s1, s0)
+
+  # s0 = tf.assign(s0, x[:, lx - 1, None] + cos_pik_term2 * s1 - s2)
   s0 = x[:, lx - 1, None] + cos_pik_term2 * s1 - s2
 
   # | s0 - s1 exp(-ip) |
   # | s0 - s1 cos(p) + i s1 sin(p)) |
   # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
+  # sqrt(s0^2 - 2 s0 s1 cos(p) + s1^2 cos^2(p) + s1^2 sin^2(p))
+  # sqrt(s0^2 - + s1^2 - 2 s0 s1 cos(p))
+
+  # TODO: Figure out why this doesn't work.
+  # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
   y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
 
+@define_scope
 def spectrogram_abs(x, window, window_overlap, bfs, fs):
   # TODO: We may need to pad for the last block.
   x_as_image = tf.expand_dims(tf.expand_dims(x, 1, name="expand_spec"), -1)
@@ -77,6 +111,7 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
 
   return S
 
+@define_scope
 def filter2(h, X, shape):
   # The MATLAB version truncates the border.
   shape = shape.upper()
@@ -93,6 +128,7 @@ def filter2(h, X, shape):
   result = tf.cast(result, _DTYPE)
   return result
 
+@define_scope
 def nsim(neuro_r, neuro_d, L):
   # neuro_r and neuro_d are Tensors of (batch, freq, patch)
   window = np.array([[0.0113, 0.0838, 0.0113],
@@ -141,9 +177,13 @@ class TFVisqol(object):
 
   def visqol_with_session(self, ref, deg):
     with tf.Session() as sess:
-      ref_var = tf.placeholder(_DTYPE, (None, None), name="ref")
-      deg_var = tf.placeholder(_DTYPE, (None, None), name="deg")
-      nsim_var = self.visqol(ref_var, deg_var)
+      ref_var = tf.placeholder(_DTYPE, ref.shape, name="ref")
+      deg_var = tf.placeholder(_DTYPE, deg.shape, name="deg")
+      nsim_var = self.visqol(ref_var, deg_var, ref.shape[1])
+
+      # Initialize state.
+      init_op = tf.global_variables_initializer()
+      sess.run(init_op)
 
       feed_dict = {ref_var: ref, deg_var: deg}
       nsim = sess.run(nsim_var, feed_dict)
@@ -152,7 +192,7 @@ class TFVisqol(object):
   def visqol(self, ref_var, deg_var, n_samples):
     # TODO HACK: We pass n_samples here because of a problem with the image patch gradient.
     # TODO: How are we supposed to specify a variable that may or may not receive a feed?
-    with tf.variable_scope("visqol", reuse=True):
+    with tf.variable_scope("visqol"):
       nsim_var = self._visqol_op(ref_var, deg_var, n_samples)
       return nsim_var
 
