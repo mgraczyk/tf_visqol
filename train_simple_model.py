@@ -19,7 +19,7 @@ from logger import logger
 _RANDOM_SEED = 42
 tf.set_random_seed(_RANDOM_SEED)
 
-_BATCH_SIZE = 64
+_BATCH_SIZE = 16
 _FS = 16000
 
 def load_index(index_path):
@@ -101,7 +101,7 @@ def main(argv):
       _, loss = sess.run([minimize_op, loss_var], feed_dict)
       logger.info("Loss is {}".format(loss))
 
-      if i > 0 and i % 10 == 0:
+      if i > 0 and i % 100 == 0:
         checkpoint_path = "model_checkpoint/{}/{}.ckpt".format(training_id, i)
         Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
         save_path = saver.save(sess, checkpoint_path)

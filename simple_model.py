@@ -33,8 +33,11 @@ def get_simple_model(deg_var, block_size):
   with tf.variable_scope("simple_model"):
     x = deg_var
 
+    x = _dense(x, block_size // 16)
+    x = tf.nn.elu(x)
+
     x = _dense(x, block_size)
     x = tf.nn.tanh(x)
 
-    output = x
+    output = deg_var + x
     return output
