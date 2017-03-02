@@ -75,8 +75,7 @@ def gga_freq_abs(x, sample_rate, freq):
     with tf.control_dependencies([s2]):
       s1 = tf.assign(s1, s0)
 
-  # s0 = tf.assign(s0, x[:, lx - 1, None] + cos_pik_term2 * s1 - s2)
-  s0 = x[:, lx - 1, None] + cos_pik_term2 * s1 - s2
+  s0 = tf.assign(s0, x[:, lx - 1, None] + cos_pik_term2 * s1 - s2)
 
   # | s0 - s1 exp(-ip) |
   # | s0 - s1 cos(p) + i s1 sin(p)) |
