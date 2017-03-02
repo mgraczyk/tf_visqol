@@ -66,7 +66,7 @@ def run_play_audio(index, train_data_queue, opts):
       logger.info("Mean square difference after filtering is {}".format(
         np.mean(np.square(deg - filter_output))))
 
-      squishyball(_FS, ref.T, deg.T, filter_output[:_BATCH_SIZE, :].T)
+      squishyball(_FS, ref.T, deg.T, filter_output.T)
 
 def main(argv):
   opts = get_arg_parser().parse_args(argv[1:])

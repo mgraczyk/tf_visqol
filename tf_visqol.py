@@ -88,6 +88,51 @@ def gga_freq_abs(x, sample_rate, freq):
   y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
+@define_scope
+def gga_freq_abs(x, sample_rate, freq):
+  """Computes the magnitude of the time domain signal x at each frequency in freq using
+     the generalized Goertzel algorithm.
+
+     x has shape (batch, block)
+  """
+  # TODO: This is slow. Any way to improve it?
+  lx = _BLOCK_SIZE
+  pik_term = 2 * _PI * freq / sample_rate
+  cos_pik_term = tf.cos(pik_term)
+  cos_pik_term2 = 2 * cos_pik_term
+
+  # TODO: Maybe if we make these states into proper variables and assign to them,
+  #       we will use less memory.
+  # Use tf.zeros because zeros_initializer doesn't seem to work in tf 1.0.
+
+  # number of iterations is (by one) less than the length of signal
+  # Pipeline the first two iterations.
+  s1 = tf.tile(x[:, 0, None], (1, _NUM_BANDS))
+  s0 = x[:, 1, None] + cos_pik_term2 * s1
+  s2 = s1
+  s1 = s0
+
+  for ind in range(2, lx - 1):
+    s0 = x[:, ind, None] + cos_pik_term2 * s1 - s2
+
+    # We have to tell tensorflow explicitly that the above assignment to s0 happens before the
+    # following assignments.
+    s2 = s1
+    s1 = s0
+
+  s0 = x[:, lx - 1, None] + cos_pik_term2 * s1 - s2
+
+  # | s0 - s1 exp(-ip) |
+  # | s0 - s1 cos(p) + i s1 sin(p)) |
+  # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
+  # sqrt(s0^2 - 2 s0 s1 cos(p) + s1^2 cos^2(p) + s1^2 sin^2(p))
+  # sqrt(s0^2 - + s1^2 - 2 s0 s1 cos(p))
+
+  # TODO: Figure out why this doesn't work.
+  # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
+  y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
+  return y
+
 
 @define_scope
 def spectrogram_abs(x, window, window_overlap, bfs, fs):
