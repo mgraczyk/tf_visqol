@@ -28,8 +28,8 @@ def _dense(layer_input, num_outputs):
   return layer_output
 
 def conv_net(deg_var, block_size,
-                n_filters=[10],
-                filter_sizes=[3],
+                n_filters=[10, 10, 10],
+                filter_sizes=[3, 3, 3],
                 dropout=False):
   weights_init = tf.contrib.layers.xavier_initializer()
   conv_in = tf.expand_dims(tf.expand_dims(deg_var, axis=-1), axis=-1)
@@ -83,5 +83,6 @@ def get_simple_model(deg_var, block_size):
     # x = tf.nn.tanh(x)
 
     x = conv_net(x, block_size)
+    x = tf.nn.tanh(x)
     output = deg_var + x
     return output
