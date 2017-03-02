@@ -40,12 +40,13 @@ def get_opus_path(data_path, input_path):
 def resample(original, fs_old, fs_new):
   with NamedTemporaryFile(suffix=".wav") as f_in, \
        NamedTemporaryFile(suffix=".wav") as f_out:
+    # Scale to avoid clipping.
+    original *= (0.5 / (np.max(np.abs(original))))
     soundfile.write(f_in, original, fs_old)
     f_in.flush()
 
     # Use R to seed the resample dither rng.
-    # Scale with -v to avoid clipping.
-    subprocess.check_call(("sox", "-v", str(63/64), "-R", f_in.name, "-r", str(fs_new), f_out.name))
+    subprocess.check_call(("sox", "-R", f_in.name, "-r", str(fs_new), f_out.name))
     resampled, new_fs = soundfile.read(f_out.name)
     assert new_fs == fs_new
     return resampled
