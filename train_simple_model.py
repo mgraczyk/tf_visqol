@@ -109,7 +109,7 @@ def main(argv):
       logger.info("Loss is {}".format(loss))
 
       if i > 0 and i % 100 == 0:
-        checkpoint_path = Path(training_path, "checkpoint" "{}.ckpt".format(i))
+        checkpoint_path = Path(training_path, "checkpoint/" "{}.ckpt".format(i))
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         save_path = saver.save(sess, str(checkpoint_path))
         logger.info("Saved model to {}".format(save_path))
