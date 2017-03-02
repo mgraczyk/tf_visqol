@@ -53,7 +53,7 @@ def run_play_audio(train_data_queue, block_size, opts):
       deg = deg_batch[:1, :]
       deg_flat = deg.reshape(-1)
 
-      feed_dict = {ref_var: ref, deg_var: deg}
+      feed_dict = {deg_var: deg}
 
       logger.info("Running batch {}".format(i))
       filter_output = sess.run(filter_output_var, feed_dict)
