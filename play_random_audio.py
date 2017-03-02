@@ -60,8 +60,12 @@ def run_play_audio(index, train_data_queue, opts):
         logger.info("Loss is {}".format(loss))
       else:
         filter_output = sess.run(filter_output_var, feed_dict)
+      filter_output = filter_output[:_BATCH_SIZE, :]
 
       logger.info("Playing reference, degraded, filter output")
+      logger.info("Mean square difference after filtering is {}".format(
+        np.mean(np.square(deg - filter_output))))
+
       squishyball(_FS, ref.T, deg.T, filter_output[:_BATCH_SIZE, :].T)
 
 def main(argv):
