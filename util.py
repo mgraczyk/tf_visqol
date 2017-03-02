@@ -19,6 +19,13 @@ def atomic_write_on_tmp(path, **kwargs):
   writer = AtomicWriter(path, **kwargs)
   return writer._open(lambda: writer.get_fileobject(dir=get_tmpdir_on_same_fs(path)))
 
+def rm_not_exists_ok(path):
+  try:
+    os.unlink(path)
+  except OSError:
+    if os.path.exists(path):
+      raise
+
 
 def get_top_level_path(data_path, subdir, input_path):
   rest = Path(input_path).relative_to(data_path)

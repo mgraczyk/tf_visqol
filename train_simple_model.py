@@ -14,6 +14,7 @@ from queue import Queue
 
 from tf_visqol import _DTYPE
 from simple_model import get_simple_model, get_loss, get_minimize_op
+from util import rm_not_exists_ok
 from logger import logger
 
 _RANDOM_SEED = 42
@@ -65,6 +66,12 @@ def main(argv):
   training_id = uuid4()
   logger.info("Training with id {}".format(training_id))
 
+  training_path = Path("./models/{}".format(training_id))
+  training_path.mkdir(parents=True, exist_ok=True)
+  latest_path = Path("./models/latest")
+  rm_not_exists_ok(str(latest_path))
+  latest_path.symlink_to(training_path.relative_to(latest_path.parent), True)
+
   opts = get_arg_parser().parse_args(argv[1:])
   index = load_index(opts.index_path)
 
@@ -102,9 +109,9 @@ def main(argv):
       logger.info("Loss is {}".format(loss))
 
       if i > 0 and i % 100 == 0:
-        checkpoint_path = "model_checkpoint/{}/{}.ckpt".format(training_id, i)
-        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
-        save_path = saver.save(sess, checkpoint_path)
+        checkpoint_path = Path(training_path, "model_checkpoint" "{}.ckpt".format(i))
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path = saver.save(sess, str(checkpoint_path))
         logger.info("Saved model to {}".format(save_path))
 
 
