@@ -30,16 +30,8 @@ def get_arg_parser():
 
   return parser
 
-def main(argv):
-  opts = get_arg_parser().parse_args(argv[1:])
-  index = load_index(opts.index_path)
+def run_play_audio(index, train_data_queue, opts):
   compute_loss = not opts.no_loss
-
-  logger.info("Starting 1 data thread")
-  train_data_queue = Queue(8)
-  data_thread = threading.Thread(target=load_data_forever, args=(index, train_data_queue))
-  data_thread.start()
-
   logger.info("Building model")
   block_size = index["block_size"]
   ref_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="ref")
@@ -52,13 +44,15 @@ def main(argv):
   with tf.Session() as sess:
     all_vars = tf.global_variables()
     logger.info("Restoring {}".format([v.name for v in all_vars]))
-    saver = tf.train.Saver(tf.global_variables())
+    saver = tf.train.Saver(tf.trainable_variables())
     saver.restore(sess, opts.model_checkpoint_path)
 
     for i in count():
       logger.info("Getting data for {}".format(i))
       ref_batch, deg_batch = train_data_queue.get()
-      feed_dict = {ref_var: ref_batch, deg_var: deg_batch}
+      ref = ref_batch[:_BATCH_SIZE, :]
+      deg = deg_batch[:_BATCH_SIZE, :]
+      feed_dict = {ref_var: ref, deg_var: deg}
 
       logger.info("Running batch {}".format(i))
       if compute_loss:
@@ -68,7 +62,19 @@ def main(argv):
         filter_output = sess.run(filter_output_var, feed_dict)
 
       logger.info("Playing reference, degraded, filter output")
-      squishyball(_FS, ref_batch.T, deg_batch.T, filter_output.T)
+      squishyball(_FS, ref.T, deg.T, filter_output[:_BATCH_SIZE, :].T)
+
+def main(argv):
+  opts = get_arg_parser().parse_args(argv[1:])
+  index = load_index(opts.index_path)
+
+  logger.info("Starting 1 data thread")
+  train_data_queue = Queue(8)
+  data_thread = threading.Thread(target=load_data_forever, args=(index, train_data_queue))
+  data_thread.start()
+
+  run_play_audio(index, train_data_queue, opts)
+
 
 
 if __name__ == "__main__":
