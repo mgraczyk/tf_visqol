@@ -100,7 +100,8 @@ def run_play_audio(train_data_queue, block_size, opts):
       if compute_loss:
         original_loss = visqol.visqol(ref_flat, deg_flat)
         filtered_loss = visqol.visqol(ref_flat, filtered_flat)
-        logger.info("nsim from {} to {}".format(original_loss, filtered_loss))
+        logger.info("nsim from {} - {} = {}".format(original_loss, filtered_loss,
+                                                    original_loss - filtered_loss))
 
       logger.info("Playing reference, degraded, filter output")
       logger.info("Mean square difference after filtering is {}".format(

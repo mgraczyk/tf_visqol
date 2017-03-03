@@ -19,6 +19,8 @@ def get_arg_parser():
   parser.add_argument(
     "--no-loss", action="store_true", default=False, help="Do not compute or show losses")
   parser.add_argument(
+    "--no-plots", action="store_true", default=False, help="Do not show spectrogram or other plots.")
+  parser.add_argument(
     "--full", action="store_true", default=False, help="User overlap add processing to process the full audio file.")
   return parser
 
