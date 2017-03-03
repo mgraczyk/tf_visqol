@@ -85,9 +85,14 @@ def awgn_at_signal_level(x, p):
   x_pow = np.sqrt(np.mean(x**2))
   return p * x_pow * np.random.randn(len(x))
 
-def squishyball(fs, *signals):
+def squishyball(fs, *signals, names=None):
+  names = names or [""]*len(signals)
+
   with ExitStack() as stack:
-    temp_files = [stack.enter_context(NamedTemporaryFile(suffix=".wav")) for _ in signals]
+    temp_files = [
+      stack.enter_context(NamedTemporaryFile(suffix="{}{} {}.wav".format("\b"*15, " "*15, name)))
+      for name, _ in zip(names, signals)
+    ]
     for s, tf in zip(signals, temp_files):
       soundfile.write(tf.name, s, fs, format="wav", subtype="float")
     subprocess.check_call(["squishyball"] + [tf.name for tf in temp_files])

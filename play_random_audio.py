@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 
 from tf_visqol import _DTYPE
 from visqol import Visqol
-from simple_model import get_simple_model, get_loss
+from simple_model import get_simple_model
 from train_simple_model import load_data_forever
 from util import squishyball
 from util import load_index
@@ -112,7 +112,13 @@ def run_play_audio(train_data_queue, block_size, opts):
 
       if show_plots:
         plot_spectrograms(ref_flat, deg_flat, filtered_flat)
-      squishyball(_FS, ref.T, deg.T, filter_output.T)
+      squishyball(
+        _FS,
+        ref.T,
+        deg.T,
+        filter_output.T,
+        ref.T - filter_output.T,
+        names=("ref", "deg", "filt", "ref - filt"))
 
 def main(argv):
   opts = get_arg_parser().parse_args(argv[1:])
