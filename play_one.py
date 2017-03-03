@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import sys
 import soundfile
 from tempfile import NamedTemporaryFile
@@ -11,9 +12,10 @@ from logger import logger
 _FS = 16000
 
 def get_arg_parser():
-  parser.add_argument("model_checkpoint_path", help="Path to the model checkpoint file")
+  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument(
     "input_path", help="The path to the input audio file to process and play.")
+  parser.add_argument("model_checkpoint_path", help="Path to the model checkpoint file")
   parser.add_argument(
     "--no-loss", action="store_true", default=False, help="Do not compute or show losses")
   return parser
