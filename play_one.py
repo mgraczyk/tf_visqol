@@ -18,6 +18,8 @@ def get_arg_parser():
   parser.add_argument("model_checkpoint_path", help="Path to the model checkpoint file")
   parser.add_argument(
     "--no-loss", action="store_true", default=False, help="Do not compute or show losses")
+  parser.add_argument(
+    "--full", action="store_true", default=False, help="User overlap add processing to process the full audio file.")
   return parser
 
 
@@ -36,7 +38,9 @@ def main(argv):
     deg, _ = soundfile.read(opus_f.name)
 
   block_size = 16000
-  train_data_queue.put((ref[:block_size, None].T, deg[:block_size, None].T))
+  slice_end = ref.shape[0] if opts.full else block_size
+
+  train_data_queue.put((ref[:slice_end, None].T, deg[:slice_end, None].T))
   run_play_audio(train_data_queue, block_size, opts)
 
 
