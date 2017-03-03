@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import sys
 import soundfile
 import gzip
@@ -15,6 +14,8 @@ from queue import Queue
 from tf_visqol import _DTYPE
 from simple_model import get_simple_model, get_loss, get_minimize_op
 from util import rm_not_exists_ok
+from util import load_index
+from script_util import get_data_script_arg_parser
 from logger import logger
 
 _RANDOM_SEED = 42
@@ -23,11 +24,7 @@ tf.set_random_seed(_RANDOM_SEED)
 _BATCH_SIZE = 16
 _FS = 16000
 
-def load_index(index_path):
-  with gzip.open(index_path, "rt") as gz_f:
-    return json.load(gz_f)
-
-def load_data_forever(index, train_data_queue):
+def load_data_forever(data_path, index, train_data_queue):
   num_infos = index["count"]
   infos = index["infos"]
   assert num_infos <= len(infos)
@@ -43,24 +40,16 @@ def load_data_forever(index, train_data_queue):
       start = info["start"]
       length = info["length"]
 
-      with soundfile.SoundFile(info["ref"]) as ref_sf:
+      with soundfile.SoundFile(str(Path(data_path, info["ref"]))) as ref_sf:
         ref_sf.seek(start)
         ref_sf.read(frames=length, dtype=np.float32, out=ref_batch[i])
 
-      with soundfile.SoundFile(info["deg"]) as deg_sf:
+      with soundfile.SoundFile(str(Path(data_path, info["deg"]))) as deg_sf:
         deg_sf.seek(start)
         deg_sf.read(frames=length, dtype=np.float32, out=deg_batch[i])
 
     train_data_queue.put((ref_batch, deg_batch))
 
-
-def get_arg_parser():
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-  parser.add_argument(
-    "index_path", help="The path to the data index created with index_data.py.")
-
-  return parser
 
 def main(argv):
   training_id = uuid4()
@@ -72,12 +61,13 @@ def main(argv):
   rm_not_exists_ok(str(latest_path))
   latest_path.symlink_to(training_path.relative_to(latest_path.parent), True)
 
-  opts = get_arg_parser().parse_args(argv[1:])
+  opts = get_data_script_arg_parser().parse_args(argv[1:])
   index = load_index(opts.index_path)
+  data_path = opts.data_path or str(Path(opts.index_path).parent)
 
   logger.info("Starting 1 data thread")
   train_data_queue = Queue(32)
-  data_thread = threading.Thread(target=load_data_forever, args=(index, train_data_queue))
+  data_thread = threading.Thread(target=load_data_forever, args=(data_path, index, train_data_queue))
   data_thread.start()
 
   logger.info("Building model")

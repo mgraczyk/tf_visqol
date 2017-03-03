@@ -4,6 +4,7 @@ import sys
 import threading
 import tensorflow as tf
 import numpy as np
+from pathlib import Path
 from itertools import count
 from queue import Queue
 
@@ -13,16 +14,16 @@ from matplotlib import pyplot as plt
 from tf_visqol import _DTYPE
 from visqol import Visqol
 from simple_model import get_simple_model, get_loss
-from train_simple_model import load_index, load_data_forever
+from train_simple_model import load_data_forever
 from util import squishyball
+from util import load_index
+from script_util import get_data_script_arg_parser
 from logger import logger
 
 _FS = 16000
 
 def get_arg_parser():
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument(
-    "index_path", help="The path to the data index created with index_data.py.")
+  parser = get_data_script_arg_parser()
   parser.add_argument("model_checkpoint_path", help="Path to the model checkpoint file")
   parser.add_argument(
     "--no-loss", action="store_true", default=False, help="Do not compute or show losses")
@@ -86,10 +87,11 @@ def run_play_audio(train_data_queue, block_size, opts):
 def main(argv):
   opts = get_arg_parser().parse_args(argv[1:])
   index = load_index(opts.index_path)
+  data_path = opts.data_path or str(Path(opts.index_path).parent)
 
   logger.info("Starting 1 data thread")
   train_data_queue = Queue(8)
-  data_thread = threading.Thread(target=load_data_forever, args=(index, train_data_queue))
+  data_thread = threading.Thread(target=load_data_forever, args=(data_path, index, train_data_queue))
   data_thread.start()
 
   run_play_audio(train_data_queue, index["block_size"], opts)

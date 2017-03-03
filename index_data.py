@@ -48,8 +48,8 @@ def _get_info_for_path(data_path, input_path, block_size, overlap):
 
   # Only include whole blocks.
   return [{
-    "ref": reference_path,
-    "deg": opus_path,
+    "ref": str(Path(reference_path).relative_to(data_path)),
+    "deg": str(Path(opus_path).relative_to(data_path)),
     "start": start,
     "length": block_size,
   } for start in range(0, num_frames - block_size + 1, overlap)]

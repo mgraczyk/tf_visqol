@@ -2,6 +2,8 @@ import os
 import numpy as np
 import soundfile
 import subprocess
+import json
+import gzip
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -28,8 +30,9 @@ def rm_not_exists_ok(path):
 
 
 def get_top_level_path(data_path, subdir, input_path):
-  rest = Path(input_path).relative_to(data_path)
+  rest = input_path.relative_to(data_path)
   return str(Path(data_path, subdir, *rest.parts[1:]))
+
 
 def get_reference_path(data_path, input_path):
   return get_top_level_path(data_path, "mono_16k_reference", input_path)
@@ -85,3 +88,7 @@ def squishyball(fs, *signals):
     for s, tf in zip(signals, temp_files):
       soundfile.write(tf.name, s, fs, format="wav", subtype="float")
     subprocess.check_call(["squishyball"] + [tf.name for tf in temp_files])
+
+def load_index(index_path):
+  with gzip.open(index_path, "rt") as gz_f:
+    return json.load(gz_f)

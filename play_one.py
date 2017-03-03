@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-import argparse
 import sys
 import soundfile
 from tempfile import NamedTemporaryFile
 from queue import Queue
 
-from train_simple_model import load_index
 from play_random_audio import run_play_audio
 from util import resample, opus_transcode
 from logger import logger
@@ -13,14 +11,11 @@ from logger import logger
 _FS = 16000
 
 def get_arg_parser():
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument(
-    "input_path", help="The path to the data index created with index_data.py.")
-
   parser.add_argument("model_checkpoint_path", help="Path to the model checkpoint file")
   parser.add_argument(
+    "input_path", help="The path to the input audio file to process and play.")
+  parser.add_argument(
     "--no-loss", action="store_true", default=False, help="Do not compute or show losses")
-
   return parser
 
 
