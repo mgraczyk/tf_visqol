@@ -192,8 +192,8 @@ def nsim(neuro_r, neuro_d, L):
   mu_r_sq = tf.square(mu_r)
   mu_d_sq = tf.square(mu_d)
   mu_r_mu_d = mu_r * mu_d
-  sigma_r_sq = filter2(window, neuro_r * neuro_r, 'valid') - mu_r_sq
-  sigma_d_sq = filter2(window, neuro_d * neuro_d, 'valid') - mu_d_sq
+  sigma_r_sq = filter2(window, tf.square(neuro_r), 'valid') - mu_r_sq
+  sigma_d_sq = filter2(window, tf.square(neuro_d), 'valid') - mu_d_sq
   sigma_r_d = filter2(window, neuro_r * neuro_d, 'valid') - mu_r_mu_d
   sigma_r = tf.sign(sigma_r_sq) * tf.sqrt(tf.abs(sigma_r_sq))
   sigma_d = tf.sign(sigma_d_sq) * tf.sqrt(tf.abs(sigma_d_sq))

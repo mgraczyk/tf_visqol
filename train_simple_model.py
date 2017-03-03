@@ -21,7 +21,7 @@ from logger import logger
 _RANDOM_SEED = 42
 tf.set_random_seed(_RANDOM_SEED)
 
-_BATCH_SIZE = 16
+_BATCH_SIZE = 8
 _FS = 16000
 
 def load_data_forever(data_path, index, train_data_queue):
@@ -76,7 +76,7 @@ def main(argv):
   deg_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="deg")
 
   filter_output_var = get_simple_model(deg_var, block_size)
-  loss_var = get_loss(ref_var, filter_output_var, _FS, block_size)
+  loss_var = get_loss(ref_var, deg_var, filter_output_var, _FS, block_size)
   minimize_op = get_minimize_op(loss_var)
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
