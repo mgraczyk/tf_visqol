@@ -35,10 +35,13 @@ def get_top_level_path(data_path, subdir, input_path):
 
 
 def get_reference_path(data_path, input_path):
-  return get_top_level_path(data_path, "mono_16k_reference", input_path)
+  return get_top_level_path(data_path, "mono_16k_reference",
+                            Path(input_path).with_suffix(".wav"))
+
 
 def get_opus_path(data_path, input_path):
-  return get_top_level_path(data_path, "mono_16k_opus_low", input_path)
+  return get_top_level_path(data_path, "mono_16k_opus_low",
+                            Path(input_path).with_suffix(".wav"))
 
 def resample(original, fs_old, fs_new):
   with NamedTemporaryFile(suffix=".wav") as f_in, \

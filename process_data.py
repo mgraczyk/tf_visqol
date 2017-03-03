@@ -76,7 +76,10 @@ def main(argv):
   parser = get_arg_parser()
   opts = parser.parse_args(argv[1:])
 
-  input_paths = glob.glob("{}/original/**/*.wav".format(opts.data_path), recursive=True)
+  input_path_prefix = "{}/original/**/".format(opts.data_path)
+  wav_paths = glob.glob("{}/*.wav".format(input_path_prefix), recursive=True)
+  flac_paths = glob.glob("{}/*.flac".format(input_path_prefix), recursive=True)
+  input_paths = wav_paths + flac_paths
 
   num_run = run_on_paths(opts.data_path, input_paths)
   logger.info("Done processing {} with {} inputs".format(num_run, len(input_paths)))
