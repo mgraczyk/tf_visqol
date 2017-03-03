@@ -9,15 +9,29 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
     tf_visqol = TFVisqol(fs)
     before_nsim = tf_visqol.visqol(ref, deg, n_samples)
     filtered_nsim = tf_visqol.visqol(ref, filter_output, n_samples)
-    # sq_loss = tf.cast(tf.reduce_mean(tf.squared_difference(filter_output, ref)), _DTYPE)
-    # loss = 1e-3*sq_loss - tf.reduce_mean(nsim)
-    # reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    nsim_loss = tf.reduce_mean(before_nsim - filtered_nsim)
 
-    clipping_loss = tf.reduce_mean(
+    clipping_loss = 1e-2 * tf.reduce_mean(
       tf.square(tf.maximum(filter_output - 1., 0.)) + tf.square(
         tf.minimum(filter_output + 1., 0.)))
-    loss = (tf.reduce_mean(before_nsim - filtered_nsim)) + 1e-1*clipping_loss
-    return loss
+
+    ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
+    ref_energy = tf.sqrt(ref_power)
+    filt_energy = tf.sqrt(tf.reduce_mean(tf.square(filter_output), axis=[1]))
+    energy_loss = 1e-2 * tf.reduce_mean(
+      tf.maximum(tf.square(ref_energy - filt_energy) / ref_power - 5e-1, 0))
+
+    # sq_loss = 1e-2 * tf.log(tf.reduce_mean(tf.squared_difference(filter_output, ref)))
+    # reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+
+    loss = nsim_loss + clipping_loss + energy_loss
+    losses = {
+      "loss": loss,
+      "nsim": nsim_loss,
+      "clipping": clipping_loss,
+      "energy": energy_loss,
+    }
+    return losses
 
 def get_minimize_op(loss):
   with tf.variable_scope("minimizer"):

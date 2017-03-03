@@ -76,8 +76,8 @@ def main(argv):
   deg_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="deg")
 
   filter_output_var = get_simple_model(deg_var, block_size)
-  loss_var = get_loss(ref_var, deg_var, filter_output_var, _FS, block_size)
-  minimize_op = get_minimize_op(loss_var)
+  losses = get_loss(ref_var, deg_var, filter_output_var, _FS, block_size)
+  minimize_op = get_minimize_op(losses["loss"])
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
 
@@ -95,11 +95,11 @@ def main(argv):
       feed_dict = {ref_var: ref_batch, deg_var: deg_batch}
 
       logger.info("Running batch {}".format(i))
-      _, loss = sess.run([minimize_op, loss_var], feed_dict)
-      logger.info("Loss is {}".format(loss))
+      _, *loss_values = sess.run([minimize_op, *losses.values()], feed_dict)
+      logger.info("Losses: {}".format(list(zip(losses.keys(), loss_values))))
 
       if i > 0 and i % 100 == 0:
-        checkpoint_path = Path(training_path, "checkpoint/" "{}.ckpt".format(i))
+        checkpoint_path = Path(training_path, "checkpoint/", "{}.ckpt".format(i))
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         save_path = saver.save(sess, str(checkpoint_path))
         logger.info("Saved model to {}".format(save_path))
