@@ -13,6 +13,8 @@ from atomicwrites import AtomicWriter
 def get_tmpdir_on_same_fs(path):
   if path.startswith("/mnt"):
     return "/mnt/tmp"
+  elif path.startswith("/datadrive"):
+    return "/datadrive/tmp"
   else:
     return "/tmp"
 
