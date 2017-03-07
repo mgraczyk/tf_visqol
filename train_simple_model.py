@@ -65,7 +65,7 @@ def main(argv):
   index = load_index(opts.index_path)
   data_path = opts.data_path or str(Path(opts.index_path).parent)
 
-  train_data_queue = Queue(32)
+  train_data_queue = Queue(128)
   num_threads = 4
   logger.info("Starting {} data thread(s)".format(num_threads))
   for i in range(num_threads):
