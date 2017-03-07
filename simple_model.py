@@ -11,15 +11,16 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
     filtered_nsim = tf_visqol.visqol(ref, filter_output, n_samples)
     nsim_loss = tf.reduce_mean(before_nsim - filtered_nsim)
 
-    clipping_loss = 1e-2 * tf.reduce_mean(
+    clipping_loss = 1e-1 * tf.reduce_mean(
       tf.square(tf.maximum(filter_output - 1., 0.)) + tf.square(
         tf.minimum(filter_output + 1., 0.)))
 
-    ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
-    ref_energy = tf.sqrt(ref_power)
-    filt_energy = tf.sqrt(tf.reduce_mean(tf.square(filter_output), axis=[1]))
-    energy_loss = 1e-2 * tf.reduce_mean(
-      tf.maximum(tf.square(ref_energy - filt_energy) / ref_power - 5e-1, 0))
+    # ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
+    # ref_energy = tf.sqrt(ref_power)
+    # filt_energy = tf.sqrt(tf.reduce_mean(tf.square(filter_output), axis=[1]))
+    # energy_loss = 1e-2 * tf.reduce_mean(
+    # tf.maximum(tf.square(ref_energy - filt_energy) / ref_power - 5e-1, 0))
+    energy_loss = tf.constant(0, dtype=_DTYPE)
 
     # sq_loss = 1e-2 * tf.log(tf.reduce_mean(tf.squared_difference(filter_output, ref)))
     # reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
@@ -35,7 +36,7 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
 
 def get_minimize_op(loss):
   with tf.variable_scope("minimizer"):
-    minimize_op = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(loss)
+    minimize_op = tf.train.AdamOptimizer(learning_rate=2e-4).minimize(loss)
     return minimize_op
 
 def _dense(layer_input, num_outputs):
@@ -52,9 +53,9 @@ def lrelu(x):
 
 def conv_net(deg_var,
              block_size,
-             n_filters=[10, 10, 5, 3],
-             filter_sizes=[3, 6, 12, 16],
-             strides=[1, 2, 8, 64]):
+             n_filters=[10, 10, 5],
+             filter_sizes=[8, 5, 5],
+             strides=[1, 1, 1, 1, 1]):
   weights_init = tf.contrib.layers.xavier_initializer_conv2d()
   conv_in = tf.expand_dims(tf.expand_dims(deg_var, axis=-1), axis=-1)
 
@@ -70,39 +71,41 @@ def conv_net(deg_var,
       W = tf.Variable(weights_init((filter_sizes[layer_i], 1, n_input, n_output)), name="W")
       b = tf.Variable(tf.zeros([n_output]), name="b")
       encoder.append(W)
-      output = lrelu(
-        tf.nn.conv2d(
-          current_input, W, strides=[1, 1, strides[layer_i], 1], padding='SAME') + b)
+      output = tf.nn.elu(tf.nn.conv2d(
+        current_input, W, strides=[1, 1, strides[layer_i], 1], padding='SAME') + b)
     outputs.append(output)
     current_input = output
 
-  current_input = tf.nn.dropout(current_input, 0.75)
+  middle = current_input
 
   for layer_i, shape in reversed(list(enumerate(shapes))):
     with tf.variable_scope("conv_out/layer_{}".format(layer_i)):
-      W = tf.Variable(
-        weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
-                      .as_list()[3])), name="W")
+      W = encoder[layer_i]
+      # W = tf.Variable(
+        # weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
+                      # .as_list()[3])), name="W")
       b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name="b")
-      output = lrelu(
+      output = tf.nn.elu(
         tf.nn.conv2d_transpose(
-          current_input + outputs[layer_i],
+          current_input,
           W,
           tf.stack([tf.shape(deg_var)[0], shape[1], shape[2], shape[3]]),
           strides=[1, 1, strides[layer_i], 1],
           padding='SAME') + b)
     current_input = output
 
-  output = tf.squeeze(current_input, [-2, -1])
-  return output
+  output = 5*tf.squeeze(current_input, [-2, -1])
+  return output, middle
 
 
 def get_simple_model(deg_var, block_size):
   weights_init = tf.contrib.layers.xavier_initializer()
   with tf.variable_scope("simple_model"):
+    batch_size = deg_var.get_shape().as_list()[0]
+
     x = deg_var
+    x, middle = conv_net(x, block_size)
+    scale = tf.nn.relu(_dense(tf.reshape(middle, (batch_size, -1)), 1))
 
-    x = conv_net(x, block_size)
-
-    output = deg_var + x
+    output = scale*deg_var + x
     return output

@@ -42,6 +42,18 @@ def plot_spectrograms(ref, deg, filtered):
   plt.subplot(515, sharex=ax1)
   plt.specgram(filtered - deg, NFFT=NFFT, Fs=_FS, noverlap=overlap)
   plt.ylabel("filt v. deg")
+
+  plt.figure()
+  ax2 = plt.subplot(311)
+  plt.plot(ref)
+  plt.ylabel("ref")
+  plt.subplot(312, sharex=ax2)
+  plt.plot(filtered)
+  plt.ylabel("filt")
+  plt.subplot(313, sharex=ax2)
+  plt.plot(ref - filtered)
+  plt.ylabel("ref - filt")
+
   plt.show(block=False)
   plt.pause(0.01)
 
