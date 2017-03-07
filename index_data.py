@@ -109,7 +109,10 @@ def get_arg_parser():
 def main(argv):
   opts = get_arg_parser().parse_args(argv[1:])
 
-  original_paths = glob.glob("{}/original/**/*.wav".format(opts.data_path), recursive=True)
+  input_path_prefix = "{}/original/**/".format(opts.data_path)
+  wav_paths = glob.glob("{}/*.wav".format(input_path_prefix), recursive=True)
+  flac_paths = glob.glob("{}/*.flac".format(input_path_prefix), recursive=True)
+  original_paths = wav_paths + flac_paths
   info_for_paths, successes = _get_info_for_paths(opts.data_path, original_paths,
                                                   opts.block_size, opts.overlap)
   index = {
