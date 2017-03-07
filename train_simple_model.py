@@ -65,10 +65,12 @@ def main(argv):
   index = load_index(opts.index_path)
   data_path = opts.data_path or str(Path(opts.index_path).parent)
 
-  logger.info("Starting 1 data thread")
   train_data_queue = Queue(32)
-  data_thread = threading.Thread(target=load_data_forever, args=(data_path, index, train_data_queue))
-  data_thread.start()
+  num_threads = 4
+  logger.info("Starting {} data thread(s)".format(num_threads))
+  for i in range(num_threads):
+    data_thread = threading.Thread(target=load_data_forever, args=(data_path, index, train_data_queue))
+    data_thread.start()
 
   logger.info("Building model")
   block_size = index["block_size"]
