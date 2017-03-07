@@ -36,8 +36,9 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
 
 def get_minimize_op(loss):
   with tf.variable_scope("minimizer"):
-    minimize_op = tf.train.AdamOptimizer(learning_rate=2e-4).minimize(loss)
-    return minimize_op
+    opt = tf.train.AdamOptimizer(learning_rate=5e-6)
+    minimize_op = opt.minimize(loss)
+    return minimize_op, opt
 
 def _dense(layer_input, num_outputs):
   weights_init = tf.contrib.layers.xavier_initializer()
@@ -53,9 +54,13 @@ def lrelu(x):
 
 def conv_net(deg_var,
              block_size,
-             n_filters=[20, 10, 10, 10],
-             filter_sizes=[9, 5, 5, 5],
-             strides=[1, 1, 1, 1, 1]):
+             n_filters=[5, 5, 5, 5, 5, 5, 10, 40, 400],
+             filter_sizes=[9, 5, 5, 5, 5, 5, 5, 5, 5],
+             strides=[1, 3, 3, 3, 3, 3, 3, 3, 3]):
+  assert len(filter_sizes) == len(n_filters)
+  assert len(strides) == len(n_filters)
+
+  batch_size = deg_var.get_shape().as_list()[0]
   weights_init = tf.contrib.layers.xavier_initializer_conv2d()
   conv_in = tf.expand_dims(tf.expand_dims(deg_var, axis=-1), axis=-1)
 
@@ -69,32 +74,41 @@ def conv_net(deg_var,
     shapes.append(shape)
     with tf.variable_scope("conv_in/layer_{}".format(layer_i)):
       W = tf.Variable(weights_init((filter_sizes[layer_i], 1, n_input, n_output)), name="W")
-      b = tf.Variable(tf.zeros([n_output]), name="b")
       encoder.append(W)
-      output = tf.nn.elu(tf.nn.conv2d(
-        current_input, W, strides=[1, 1, strides[layer_i], 1], padding='SAME') + b)
+      output = (tf.nn.conv2d(
+        current_input, W, strides=[1, strides[layer_i], 1, 1], padding='SAME'))
     outputs.append(output)
     current_input = output
 
+
+  last_layer_size = current_input.get_shape().as_list()
+  current_input = tf.reshape(current_input, (batch_size, -1))
+
+  current_input = lrelu(_dense(current_input, 256))
+  current_input = lrelu(_dense(current_input, 256))
+  current_input = _dense(current_input, last_layer_size[1] * last_layer_size[3])
+  current_input = tf.nn.tanh(current_input)
+  current_input = tf.reshape(current_input, outputs[-1].get_shape())
   middle = current_input
 
   for layer_i, shape in reversed(list(enumerate(shapes))):
     with tf.variable_scope("conv_out/layer_{}".format(layer_i)):
-      # W = encoder[layer_i]
-      W = tf.Variable(
-        weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
-                      .as_list()[3])), name="W")
+      W = encoder[layer_i]
+      # W = tf.Variable(
+        # weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
+                      # .as_list()[3])), name="W")
+
       b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name="b")
-      output = tf.nn.elu(
+      output = (
         tf.nn.conv2d_transpose(
           current_input,
           W,
           tf.stack([tf.shape(deg_var)[0], shape[1], shape[2], shape[3]]),
-          strides=[1, 1, strides[layer_i], 1],
+          strides=[1, strides[layer_i], 1, 1],
           padding='SAME') + b)
     current_input = output
 
-  output = 5*tf.squeeze(current_input, [-2, -1])
+  output = tf.squeeze(current_input, [-2, -1])
   return output, middle
 
 
@@ -105,7 +119,7 @@ def get_simple_model(deg_var, block_size):
 
     x = deg_var
     x, middle = conv_net(x, block_size)
-    scale = tf.nn.relu(_dense(tf.reshape(middle, (batch_size, -1)), 1))
-
-    output = scale*deg_var + x
+    # scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
+    # output = scale*deg_var + (1 - scale) * x
+    output = 0 * deg_var + x
     return output

@@ -79,7 +79,10 @@ def main(argv):
 
   filter_output_var = get_simple_model(deg_var, block_size)
   losses = get_loss(ref_var, deg_var, filter_output_var, _FS, block_size)
-  minimize_op = get_minimize_op(losses["loss"])
+  minimize_op, opt = get_minimize_op(losses["loss"])
+  grads = opt.compute_gradients(losses["nsim"])
+  norm_op = tf.global_norm(grads)
+
   init_op_new = tf.global_variables_initializer()
   init_op_old = tf.initialize_all_variables()
 
@@ -97,8 +100,9 @@ def main(argv):
       feed_dict = {ref_var: ref_batch, deg_var: deg_batch}
 
       logger.info("Running batch {}".format(i))
-      _, *loss_values = sess.run([minimize_op, *losses.values()], feed_dict)
+      _, norm, *loss_values = sess.run([minimize_op, norm_op, *losses.values()], feed_dict)
       logger.info("Losses: {}".format(list(zip(losses.keys(), loss_values))))
+      logger.info("Norm: {}".format(norm))
 
       if i > 0 and i % 100 == 0:
         checkpoint_path = Path(training_path, "checkpoint/", "{}.ckpt".format(i))

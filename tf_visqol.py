@@ -201,7 +201,7 @@ def nsim(neuro_r, neuro_d, L):
   S_r_d = (sigma_r_d + C2) / (sigma_r * sigma_d + C2)
 
   # Why is this here?
-  nmap = tf.sign(L_r_d) * tf.abs(L_r_d) * tf.sign(S_r_d) * tf.abs(S_r_d)
+  nmap = L_r_d * S_r_d
 
   mNSIM = tf.reduce_mean(nmap, axis=[1, 2])
   return mNSIM

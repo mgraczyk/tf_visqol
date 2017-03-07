@@ -100,7 +100,7 @@ def nsim(neuro_r, neuro_d, L):
   sigma_d = np.sign(sigma_d_sq) * np.sqrt(np.abs(sigma_d_sq))
   L_r_d = (2 * mu_r * mu_d + C1) / (mu_r_sq + mu_d_sq + C1)
   S_r_d = (sigma_r_d + C2) / (sigma_r * sigma_d + C2)
-  nmap = np.sign(L_r_d) * np.abs(L_r_d) * np.sign(S_r_d) * np.abs(S_r_d)
+  nmap = L_r_d * S_r_d
 
   mNSIM = np.mean(nmap)
   return mNSIM
