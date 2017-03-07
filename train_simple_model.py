@@ -21,7 +21,7 @@ from logger import logger
 _RANDOM_SEED = 42
 tf.set_random_seed(_RANDOM_SEED)
 
-_BATCH_SIZE = 8
+_BATCH_SIZE = 16
 _FS = 16000
 
 def load_data_forever(data_path, index, train_data_queue):

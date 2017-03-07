@@ -53,8 +53,8 @@ def lrelu(x):
 
 def conv_net(deg_var,
              block_size,
-             n_filters=[10, 10, 5],
-             filter_sizes=[8, 5, 5],
+             n_filters=[20, 10, 10, 10],
+             filter_sizes=[9, 5, 5, 5],
              strides=[1, 1, 1, 1, 1]):
   weights_init = tf.contrib.layers.xavier_initializer_conv2d()
   conv_in = tf.expand_dims(tf.expand_dims(deg_var, axis=-1), axis=-1)
@@ -80,10 +80,10 @@ def conv_net(deg_var,
 
   for layer_i, shape in reversed(list(enumerate(shapes))):
     with tf.variable_scope("conv_out/layer_{}".format(layer_i)):
-      W = encoder[layer_i]
-      # W = tf.Variable(
-        # weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
-                      # .as_list()[3])), name="W")
+      # W = encoder[layer_i]
+      W = tf.Variable(
+        weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
+                      .as_list()[3])), name="W")
       b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name="b")
       output = tf.nn.elu(
         tf.nn.conv2d_transpose(
