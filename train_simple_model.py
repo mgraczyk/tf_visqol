@@ -21,7 +21,7 @@ from logger import logger
 _RANDOM_SEED = 42
 tf.set_random_seed(_RANDOM_SEED)
 
-_BATCH_SIZE = 16
+_BATCH_SIZE = 20
 _FS = 16000
 
 def load_data_forever(data_path, index, train_data_queue):
@@ -29,9 +29,11 @@ def load_data_forever(data_path, index, train_data_queue):
   infos = index["infos"]
   assert num_infos <= len(infos)
 
+  replace = num_infos < _BATCH_SIZE
+
   block_size = index["block_size"]
   while True:
-    data_indices = np.random.choice(num_infos, size=_BATCH_SIZE, replace=False)
+    data_indices = np.random.choice(num_infos, size=_BATCH_SIZE, replace=replace)
     ref_batch = np.empty((_BATCH_SIZE, block_size), dtype=np.float32)
     deg_batch = np.empty((_BATCH_SIZE, block_size), dtype=np.float32)
 
@@ -66,7 +68,7 @@ def main(argv):
   data_path = opts.data_path or str(Path(opts.index_path).parent)
 
   train_data_queue = Queue(128)
-  num_threads = 4
+  num_threads = 3
   logger.info("Starting {} data thread(s)".format(num_threads))
   for i in range(num_threads):
     data_thread = threading.Thread(target=load_data_forever, args=(data_path, index, train_data_queue))
@@ -103,6 +105,8 @@ def main(argv):
       _, norm, *loss_values = sess.run([minimize_op, norm_op, *losses.values()], feed_dict)
       logger.info("Losses: {}".format(list(zip(losses.keys(), loss_values))))
       logger.info("Norm: {}".format(norm))
+      if np.isnan(norm):
+        import pdb; pdb.set_trace()
 
       if i > 0 and i % 100 == 0:
         checkpoint_path = Path(training_path, "checkpoint/", "{}.ckpt".format(i))
