@@ -23,14 +23,15 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
     energy_loss = tf.constant(0, dtype=_DTYPE)
 
     # sq_loss = 1e-2 * tf.log(tf.reduce_mean(tf.squared_difference(filter_output, ref)))
-    # reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    reg_loss = tf.reduce_mean(tf.losses.get_regularization_losses())
 
-    loss = nsim_loss + clipping_loss + energy_loss
+    loss = nsim_loss + clipping_loss + energy_loss + reg_loss
     losses = {
       "loss": loss,
       "nsim": nsim_loss,
       "clipping": clipping_loss,
       "energy": energy_loss,
+      "reg": reg_loss
     }
     return losses
 
