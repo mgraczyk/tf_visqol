@@ -1,4 +1,14 @@
-function [moslqo, vnsim] = visqol_simple(refSig, degSig, fs)
+function [moslqo, vnsim, debugInfo ] = visqol_simple(refSig, degSig, fs)
+%
+% ViSQOL
+%
+%
+% Use NSIM to align and NSIM to calc similarity
+% Use 16 critical bands for NB, 21 bands for WB
+%
+% (c) Andrew Hines, November 2012
+%
+%%
 
 %critical bands (NB from ANSI SII spec)
 bfs=[50 150 250 350 450 570 700 840 1000 1170 1370 1600 1850 2150 2500 2900 3400 4000 4800 6500 8000];
@@ -48,6 +58,36 @@ degPatchIdxs(replace_idx) = refPatchIdxs(replace_idx);
 
 vnsim = calcPatchSimilarity(patches, degPatchIdxs, img_dsig, NUM_BANDS, L, speechFlag);
 
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%STEP SIX: PLOT FIGURE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%if plotFlag==1
+    %plotVISQOL(img_rsig,img_dsig,patchcorr,PATCH_SIZE,refPatchIdxs,degPatchIdxs,patchNSIM,vnsim,bfs,t_sp_rsig,t_sp_dsig,moslqo,bandFlag);
+ %end
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%STEP SIX: Print Debug Info
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+debugInfo=[];
+
+%debugInfo.bfs=bfs;
+%debugInfo.bandFlag=bandFlag;
+%debugInfo.refPatchIdxs=refPatchIdxs;
+%debugInfo.degPatchIdxs=degPatchIdxs;
+%debugInfo.t_sp=t_sp_rsig;
+%debugInfo.hammingwindowsamples=windowsize;
+%debugInfo.reffloor=reffloor;
+%debugInfo.patchDeltas=patchDeltas;
+%debugInfo.patchcorr=patchcorr;
+%debugInfo.vnsim=vnsim;
+%debugInfo.moslqo=moslqo;
+%debugInfo.patchNSIM=patchNSIM;
+%debugInfo.maxR=max(max(img_rsig));
+%debugInfo.maxD=max(max(img_dsig));
+%debugInfo.L=L;
 
 moslqo = 0;
 %[ moslqo ] = visqol2moslqo( vnsim );        
@@ -69,9 +109,9 @@ function [spec_bf] = getSigSpect(ssig, Fs_r, bfs, window)
     window_overlap = length(window)*0.5; 
     S = my_spectrogram(ssig, window, window_overlap, bfs, Fs_r);
     
-    S = abs(S);                       % remove complex component
-    S(S == 0) = eps;                  % no -infs in power dB
-    S = S / max(S(:));              % normalise Power
+    S=abs(S);                       % remove complex component
+    S(S==0) = eps;                  % no -infs in power dB
+    S = S/max(S(:));              % normalise Power
     spec_bf = 20*log10(S);          % power in dB
 end
 
