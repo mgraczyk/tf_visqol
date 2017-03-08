@@ -55,9 +55,9 @@ def lrelu(x):
 
 def conv_net(deg_var,
              block_size,
-             n_filters=[5, 5, 5, 5, 5, 5, 10, 40, 400],
-             filter_sizes=[9, 5, 5, 5, 5, 5, 5, 5, 5],
-             strides=[1, 3, 3, 3, 3, 3, 3, 3, 3]):
+             n_filters=[10, 8, 8, 8, 8, 8, 10, 40, 70],
+             filter_sizes=[3, 5, 5, 5, 5, 5, 5, 5, 5],
+             strides=[1, 2, 3, 3, 3, 3, 3, 3, 3]):
   assert len(filter_sizes) == len(n_filters)
   assert len(strides) == len(n_filters)
 
@@ -120,7 +120,15 @@ def get_simple_model(deg_var, block_size):
 
     x = deg_var
     x, middle = conv_net(x, block_size)
-    # scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
-    # output = scale*deg_var + (1 - scale) * x
-    output = 0 * deg_var + x
+    scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
+
+    # Try to drive scale to zero.
+    tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-2), [scale])
+
+    output = scale*deg_var + (1 - scale) * x
+    # output = 0 * deg_var + x
+
+    # Regularize the output so that we learn to be silent when the output is silent.
+    tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(5e-3),
+                                           [tf.reduce_mean(tf.abs(output), axis=[1])])
     return output
