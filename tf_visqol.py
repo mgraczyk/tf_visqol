@@ -130,7 +130,7 @@ def gga_freq_abs(x, sample_rate, freq):
 
   # TODO: Figure out why this doesn't work.
   # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
-  y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
+  y = tf.sqrt(1e-6 + (s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
 
@@ -195,8 +195,8 @@ def nsim(neuro_r, neuro_d, L):
   sigma_r_sq = filter2(window, tf.square(neuro_r), 'valid') - mu_r_sq
   sigma_d_sq = filter2(window, tf.square(neuro_d), 'valid') - mu_d_sq
   sigma_r_d = filter2(window, neuro_r * neuro_d, 'valid') - mu_r_mu_d
-  sigma_r = tf.sign(sigma_r_sq) * tf.sqrt(tf.abs(sigma_r_sq))
-  sigma_d = tf.sign(sigma_d_sq) * tf.sqrt(tf.abs(sigma_d_sq))
+  sigma_r = tf.sign(sigma_r_sq) * tf.sqrt(1e-6 + tf.abs(sigma_r_sq))
+  sigma_d = tf.sign(sigma_d_sq) * tf.sqrt(1e-6 + tf.abs(sigma_d_sq))
   L_r_d = (2. * mu_r * mu_d + C1) / (mu_r_sq + mu_d_sq + C1)
   S_r_d = (sigma_r_d + C2) / (sigma_r * sigma_d + C2)
 
@@ -273,8 +273,8 @@ class TFVisqol(object):
 
   def create_patches(self, img_sig):
     # TODO: This slice is done in the MATLAB, but seems dumb.
-    original_num_blocks = tf.shape(img_sig)[2]
-    begin = int(_PATCH_SIZE / 2) - 1
+    # begin = int(_PATCH_SIZE / 2) - 1
+    begin = 0
     img_rsig_trunc = tf.slice(img_sig, begin=[0, 0, begin], size=[-1, -1, -1])
     img_4d = tf.expand_dims(img_rsig_trunc, -1, name="expand_patches")
     img_4d = tf.cast(img_4d, dtype=tf.float32)
