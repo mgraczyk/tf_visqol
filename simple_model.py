@@ -15,15 +15,15 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
       tf.square(tf.maximum(filter_output - 1., 0.)) + tf.square(
         tf.minimum(filter_output + 1., 0.)))
 
-    # ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
-    # ref_energy = tf.sqrt(ref_power)
-    # filt_energy = tf.sqrt(tf.reduce_mean(tf.square(filter_output), axis=[1]))
-    # energy_loss = 1e-2 * tf.reduce_mean(
-    # tf.maximum(tf.square(ref_energy - filt_energy) / ref_power - 5e-1, 0))
-    energy_loss = tf.constant(0, dtype=_DTYPE)
+    ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
+    ref_energy = tf.sqrt(1e-4 + ref_power)
+    filt_energy = tf.sqrt(1e-4 + tf.reduce_mean(tf.square(filter_output), axis=[1]))
+    energy_loss = 1e-1 * tf.reduce_mean(tf.maximum(tf.square(ref_energy - filt_energy) / ref_power - 5e-1, 0))
+    # energy_loss = tf.constant(0, dtype=_DTYPE)
 
     # sq_loss = 1e-2 * tf.log(tf.reduce_mean(tf.squared_difference(filter_output, ref)))
-    reg_loss = tf.reduce_mean(tf.losses.get_regularization_losses())
+    # reg_loss = tf.reduce_mean(tf.losses.get_regularization_losses())
+    reg_loss = tf.constant(0, dtype=_DTYPE)
 
     loss = nsim_loss + clipping_loss + energy_loss + reg_loss
     losses = {
@@ -37,7 +37,7 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
 
 def get_minimize_op(loss):
   with tf.variable_scope("minimizer"):
-    opt = tf.train.AdamOptimizer(learning_rate=5e-6)
+    opt = tf.train.AdamOptimizer(learning_rate=3e-6)
     minimize_op = opt.minimize(loss)
     return minimize_op, opt
 
@@ -47,7 +47,7 @@ def _dense(layer_input, num_outputs):
     layer_input,
     num_outputs=num_outputs,
     weights_initializer=weights_init,
-    biases_initializer=weights_init)
+    biases_initializer=tf.constant_initializer(0.))
   return layer_output
 
 def lrelu(x):
@@ -85,8 +85,8 @@ def conv_net(deg_var,
   last_layer_size = current_input.get_shape().as_list()
   current_input = tf.reshape(current_input, (batch_size, -1))
 
-  current_input = lrelu(_dense(current_input, 256))
-  current_input = lrelu(_dense(current_input, 256))
+  current_input = tf.nn.elu(_dense(current_input, 256))
+  current_input = tf.nn.elu(_dense(current_input, 256))
   current_input = _dense(current_input, last_layer_size[1] * last_layer_size[3])
   current_input = tf.nn.tanh(current_input)
   current_input = tf.reshape(current_input, outputs[-1].get_shape())
@@ -94,10 +94,10 @@ def conv_net(deg_var,
 
   for layer_i, shape in reversed(list(enumerate(shapes))):
     with tf.variable_scope("conv_out/layer_{}".format(layer_i)):
-      W = encoder[layer_i]
-      # W = tf.Variable(
-        # weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
-                      # .as_list()[3])), name="W")
+      #  Don't weight tie
+      W = tf.Variable(
+        weights_init((filter_sizes[layer_i], 1, shape[3], current_input.get_shape()
+                      .as_list()[3])), name="W")
 
       b = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name="b")
       output = (
@@ -120,15 +120,15 @@ def get_simple_model(deg_var, block_size):
 
     x = deg_var
     x, middle = conv_net(x, block_size)
-    scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
+    # scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
 
     # Try to drive scale to zero.
-    tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-2), [scale])
+    # tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-2), [scale])
 
-    output = scale*deg_var + (1 - scale) * x
-    # output = 0 * deg_var + x
+    # output = scale*deg_var + (1 - scale) * x
+    output = 0 * deg_var + x
 
     # Regularize the output so that we learn to be silent when the output is silent.
-    tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(5e-3),
-                                           [tf.reduce_mean(tf.abs(output), axis=[1])])
+    # tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-3),
+                                           # [tf.reduce_mean(tf.abs(output), axis=[1])])
     return output
