@@ -17,6 +17,10 @@ _PATCH_SIZE = 30
 _PI = np.pi
 _BLOCK_SIZE = 512
 
+def stable_sqrt(x):
+  # return tf.sqrt(1e-6 + x)
+  return tf.sqrt(x)
+
 
 def define_scope(function, scope=None, *args, **kwargs):
   """args and kwargs are passed to variable_scope."""
@@ -38,7 +42,7 @@ def log10(x):
 # Adapted from
 #   http://www.mathworks.com/matlabcentral/fileexchange/35103-generalized-goertzel-algorithm/content/goertzel_general_shortened.m
 @define_scope
-def gga_freq_abs(x, sample_rate, freq):
+def gga_freq_abs_vars(x, sample_rate, freq):
   """Computes the magnitude of the time domain signal x at each frequency in freq using
      the generalized Goertzel algorithm.
 
@@ -130,7 +134,7 @@ def gga_freq_abs(x, sample_rate, freq):
 
   # TODO: Figure out why this doesn't work.
   # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
-  y = tf.sqrt(1e-6 + (s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
+  y = stable_sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
 
@@ -195,8 +199,8 @@ def nsim(neuro_r, neuro_d, L):
   sigma_r_sq = filter2(window, tf.square(neuro_r), 'valid') - mu_r_sq
   sigma_d_sq = filter2(window, tf.square(neuro_d), 'valid') - mu_d_sq
   sigma_r_d = filter2(window, neuro_r * neuro_d, 'valid') - mu_r_mu_d
-  sigma_r = tf.sign(sigma_r_sq) * tf.sqrt(1e-6 + tf.abs(sigma_r_sq))
-  sigma_d = tf.sign(sigma_d_sq) * tf.sqrt(1e-6 + tf.abs(sigma_d_sq))
+  sigma_r = tf.sign(sigma_r_sq) * stable_sqrt(tf.abs(sigma_r_sq))
+  sigma_d = tf.sign(sigma_d_sq) * stable_sqrt(tf.abs(sigma_d_sq))
   L_r_d = (2. * mu_r * mu_d + C1) / (mu_r_sq + mu_d_sq + C1)
   S_r_d = (sigma_r_d + C2) / (sigma_r * sigma_d + C2)
 
