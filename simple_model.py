@@ -25,14 +25,13 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
     # reg_loss = tf.reduce_mean(tf.losses.get_regularization_losses())
     reg_loss = tf.constant(0, dtype=_DTYPE)
 
-    loss = nsim_loss + clipping_loss + energy_loss + reg_loss
     losses = {
-      "loss": loss,
       "nsim": nsim_loss,
       "clipping": clipping_loss,
       "energy": energy_loss,
       "reg": reg_loss
     }
+    losses["loss"] = sum(losses.values())
     return losses
 
 def get_minimize_op(loss):
