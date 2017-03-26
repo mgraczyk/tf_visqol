@@ -27,60 +27,6 @@ def log10(x):
   denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
   return numerator / denominator
 
-
-# Adapted from
-#   http://www.mathworks.com/matlabcentral/fileexchange/35103-generalized-goertzel-algorithm/content/goertzel_general_shortened.m
-@define_scope
-def gga_freq_abs_vars(x, sample_rate, freq):
-  """Computes the magnitude of the time domain signal x at each frequency in freq using
-     the generalized Goertzel algorithm.
-
-     x has shape (batch, block)
-  """
-  # TODO: This is slow. Any way to improve it?
-  lx = _BLOCK_SIZE
-  pik_term = 2 * _PI * freq / sample_rate
-  cos_pik_term = tf.cos(pik_term)
-  cos_pik_term2 = 2 * cos_pik_term
-
-  # TODO: Maybe if we make these states into proper variables and assign to them,
-  #       we will use less memory.
-  # Use tf.zeros because zeros_initializer doesn't seem to work in tf 1.0.
-  shape = (x.get_shape()[0], _NUM_BANDS)
-  s0 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
-  s1 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
-  s2 = tf.Variable(tf.zeros(shape, dtype=_DTYPE), trainable=False)
-
-  # number of iterations is (by one) less than the length of signal
-  # Pipeline the first two iterations.
-  s1 = tf.assign(s1, tf.tile(x[:, 0, None], (1, _NUM_BANDS)))
-  s0 = tf.assign(s0, x[:, 1, None] + cos_pik_term2 * s1)
-  s2 = tf.assign(s2, s1)
-  s1 = tf.assign(s1, s0)
-
-  for ind in range(2, lx - 1):
-    s0 = tf.assign(s0, x[:, ind, None] + cos_pik_term2 * s1 - s2)
-
-    # We have to tell tensorflow explicitly that the above assignment to s0 happens before the
-    # following assignments.
-    with tf.control_dependencies([s0]):
-      s2 = tf.assign(s2, s1)
-    with tf.control_dependencies([s2]):
-      s1 = tf.assign(s1, s0)
-
-  s0 = tf.assign(s0, x[:, lx - 1, None] + cos_pik_term2 * s1 - s2)
-
-  # | s0 - s1 exp(-ip) |
-  # | s0 - s1 cos(p) + i s1 sin(p)) |
-  # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
-  # sqrt(s0^2 - 2 s0 s1 cos(p) + s1^2 cos^2(p) + s1^2 sin^2(p))
-  # sqrt(s0^2 - + s1^2 - 2 s0 s1 cos(p))
-
-  # TODO: Figure out why this doesn't work.
-  # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
-  y = tf.sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
-  return y
-
 @define_scope
 def gga_freq_abs(x, sample_rate, freq):
   """Computes the magnitude of the time domain signal x at each frequency in freq using
@@ -136,11 +82,21 @@ def gga_freq_abs(x, sample_rate, freq):
   return y
 
 
+def DFT_matrix(N, fs, freqs):
+  Wreal = np.empty((N, freqs.size))
+  Wimag = np.empty((N, freqs.size))
+
+  for j in range(freqs.size):
+    for n in range(N):
+      Wreal[n, j] = np.cos(-2 * np.pi * n * freqs[j] / fs)
+      Wimag[n, j] = np.sin(-2 * np.pi * n * freqs[j] / fs)
+  return Wreal, Wimag
+
+
 @define_scope
-def spectrogram_abs(x, window, window_overlap, bfs, fs):
+def spectrogram_abs(x, window, window_overlap, fs, W):
   # TODO: We may need to pad for the last block.
   x_as_image = tf.expand_dims(tf.expand_dims(x, 1, name="expand_spec"), -1)
-  x_as_image = tf.cast(x_as_image, tf.float32)
   blocks_raw = tf.extract_image_patches(
     x_as_image,
     ksizes=[1, 1, _BLOCK_SIZE, 1],
@@ -148,13 +104,13 @@ def spectrogram_abs(x, window, window_overlap, bfs, fs):
     rates=[1, 1, 1, 1],
     padding="VALID")
   blocks = tf.squeeze(blocks_raw, [1])
-  blocks = tf.cast(blocks, _DTYPE)
   windows_blocks = window * blocks
 
-  wb_flat = tf.reshape(windows_blocks, (-1, _BLOCK_SIZE))
-  S_flat = gga_freq_abs(wb_flat, fs, bfs)
-  S = tf.transpose(tf.reshape(S_flat, (tf.shape(x)[0], -1, _NUM_BANDS)), perm=(0, 2, 1))
+  Wreal, Wimag = W
+  Sreal = tf.tensordot(windows_blocks, Wreal, axes=1)
+  Simag = tf.tensordot(windows_blocks, Wimag, axes=1)
 
+  S = tf.sqrt(tf.square(Sreal) + tf.square(Simag))
   return S
 
 @define_scope
@@ -169,9 +125,8 @@ def filter2(h, X, shape):
   X = tf.expand_dims(X, -1, name="expand_filter")
 
   # TODO Tensorflow doesn't support 64-bit conv.
-  result = tf.nn.conv2d(tf.cast(X, tf.float32), tf.cast(h, tf.float32), strides=[1, 1, 1, 1], padding=shape)
+  result = tf.nn.conv2d(X, h, strides=[1, 1, 1, 1], padding=shape)
   result = tf.squeeze(result, [-1])
-  result = tf.cast(result, _DTYPE)
   return result
 
 @define_scope
@@ -221,6 +176,11 @@ class TFVisqol(object):
     self._window_overlap = int(window_size / 2)
     self._window = tf.constant(np.hamming(window_size + 1)[:window_size], dtype=_DTYPE)
 
+    Wreal, Wimag = DFT_matrix(_BLOCK_SIZE, self._fs, _BFS_ARR)
+    Wreal = tf.constant(Wreal, dtype=_DTYPE)
+    Wimag = tf.constant(Wimag, dtype=_DTYPE)
+    self._W = Wreal, Wimag
+
   def visqol_with_session(self, ref, deg):
     with tf.Session() as sess:
       ref_var = tf.placeholder(_DTYPE, ref.shape, name="ref")
@@ -261,7 +221,7 @@ class TFVisqol(object):
     return nsim
 
   def _get_sig_spect(self, x, num_blocks):
-    S = spectrogram_abs(x, self._window, self._window_overlap, _BFS, self._fs)
+    S = spectrogram_abs(x, self._window, self._window_overlap, self._fs, self._W)
 
     # TODO HACK: This reshape is here because extract_image_patches gradient seems to have a bug.
     #   http://stackoverflow.com/questions/41841713/tensorflow-gradient-unsupported-operand-type
@@ -279,7 +239,6 @@ class TFVisqol(object):
     begin = 0
     img_rsig_trunc = tf.slice(img_sig, begin=[0, 0, begin], size=[-1, -1, -1])
     img_4d = tf.expand_dims(img_rsig_trunc, -1, name="expand_patches")
-    img_4d = tf.cast(img_4d, dtype=tf.float32)
     patches = tf.extract_image_patches(
       img_4d,
       ksizes=[1, 1, _PATCH_SIZE, 1],
@@ -287,7 +246,6 @@ class TFVisqol(object):
       rates=[1, 1, 1, 1],
       padding="VALID")
     patches = tf.transpose(patches, perm=[0, 2, 1, 3])
-    patches = tf.cast(patches, _DTYPE)
 
     return patches
 
