@@ -224,7 +224,8 @@ function [patches, refPatchIdxs]=createRefPatches(img_rsig, PATCH_SIZE)
 %   refPatchIdxs    array containing the x-offsets for the corresponding patch 
 %               start indices
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    refPatchIdxs=PATCH_SIZE/2:PATCH_SIZE:length(img_rsig)-PATCH_SIZE;%start 5 frames in to allow for warps
+    refPatchIdxs=1:PATCH_SIZE:length(img_rsig)-PATCH_SIZE;%start 5 frames in to allow for warps
+    %refPatchIdxs=PATCH_SIZE/2:PATCH_SIZE:length(img_rsig)-PATCH_SIZE;%start 5 frames in to allow for warps
     refPatchIdxs=refPatchIdxs';
     NUM_PATCHES=length(refPatchIdxs);
     patches=cell(NUM_PATCHES,1);    
