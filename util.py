@@ -39,6 +39,12 @@ def rm_not_exists_ok(path):
     if os.path.exists(path):
       raise
 
+def mkdirs_exists_ok(path):
+  try:
+    os.makedirs(path)
+  except OSError:
+    if not os.path.isdir(path):
+      raise
 
 def get_top_level_path(data_path, subdir, input_path):
   rest = input_path.relative_to(data_path)
