@@ -12,9 +12,8 @@ def get_loss(ref, deg, filter_output, fs, n_samples):
     filtered_nsim = tf_visqol.visqol(ref, filter_output, n_samples)
     nsim_loss = tf.reduce_mean(before_nsim - filtered_nsim)
 
-    clipping_loss = 1e-1 * tf.reduce_mean(
-      tf.square(tf.maximum(filter_output - 1., 0.)) + tf.square(
-        tf.minimum(filter_output + 1., 0.)))
+    clipping_loss = 1e-2 * tf.reduce_mean(
+      tf.maximum(filter_output - 1., 0.) - tf.minimum(filter_output + 1., 0.))
 
     ref_power = tf.reduce_mean(tf.square(ref), axis=[1])
     ref_energy = tf.sqrt(1e-4 + ref_power)
