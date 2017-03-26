@@ -131,3 +131,60 @@ def get_simple_model(deg_var, block_size):
     # tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-3),
                                            # [tf.reduce_mean(tf.abs(output), axis=[1])])
     return output
+
+def assertShape(var, shape):
+  varshape = var.get_shape()
+  assert varshape == shape, "{} != {}".format(varshape, shape)
+
+@define_scope
+def get_baseline_model(deg_var, block_size):
+  weights_init = tf.contrib.layers.xavier_initializer()
+  batch_size = deg_var.get_shape().as_list()[0]
+  assertShape(deg_var, (batch_size, block_size))
+
+  
+  deg_var = tf.expand_dims(deg_var, axis=-1)
+  assertShape(deg_var, (batch_size, block_size, 1))
+
+  # Compute a representation of the input.
+  filter_size_pre = 16
+  n_filters_pre = 10
+  x = deg_var
+  with tf.variable_scope("input_conv"):
+    W = tf.Variable(weights_init((filter_size_pre, 1, n_filters_pre)), name="W")
+    b = tf.Variable(tf.zeros([n_filters_pre]), name="b")
+    x = tf.nn.conv1d(x, W, 1, "SAME")
+    x = tf.nn.bias_add(x, b)
+  preprocessed = x
+  assertShape(preprocessed, (batch_size, block_size, n_filters_pre))
+
+  # Filter the input selectively based on the representation.
+  filter_size_attn = 8
+  n_filters_attn = 20
+  x = deg_var
+  with tf.variable_scope("filter_conv"):
+    W = tf.Variable(weights_init((filter_size_attn, 1, n_filters_attn)), name="W")
+    b = tf.Variable(tf.zeros([n_filters_attn]), name="b")
+    x = tf.nn.conv1d(x, W, 1, "SAME")
+    x = tf.nn.bias_add(x, b)
+  preattention = x
+  assertShape(preattention, (batch_size, block_size, n_filters_attn))
+
+  x = preattention
+  with tf.variable_scope("filter_attention"):
+    W = tf.Variable(weights_init((n_filters_attn, n_filters_pre)), name="W")
+    b = tf.Variable(tf.zeros([n_filters_pre]), name="b")
+    x = tf.tensordot(x, W, axes=((2,), (0,)))
+    x = tf.nn.bias_add(x, b)
+    x = tf.nn.elu(x)
+    x = tf.nn.softmax(x)
+  filter_attention = x
+  assertShape(filter_attention, (batch_size, block_size, n_filters_pre))
+
+  with tf.variable_scope("apply_attention"):
+    x = tf.einsum("ijk,ijk->ij", preprocessed, filter_attention)
+  assertShape(x, (batch_size, block_size))
+
+  output = x
+
+  return x
