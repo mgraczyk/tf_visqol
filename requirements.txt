@@ -6,3 +6,5 @@ atomicwrites
 numpy
 awscli
 scipy
+matplotlib
+tornado
