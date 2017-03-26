@@ -2,6 +2,7 @@ import os
 import numpy as np
 import soundfile
 import subprocess
+import fnmatch
 import json
 import gzip
 from contextlib import ExitStack
@@ -9,12 +10,20 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from atomicwrites import AtomicWriter
 
+def find_recursive(path, pattern):
+  matches = []
+  for root, dirnames, filenames in os.walk(path):
+    for filename in fnmatch.filter(filenames, pattern):
+      matches.append(os.path.join(root, filename))
+  return matches
 
 def get_tmpdir_on_same_fs(path):
   if path.startswith("/mnt"):
     return "/mnt/tmp"
   elif path.startswith("/datadrive"):
     return "/datadrive/tmp"
+  elif path.startswith("/raid.local"):
+    return "/raid.local/tmp"
   else:
     return "/tmp"
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import argparse
-import glob
 import soundfile
 import concurrent
 import json
@@ -12,7 +11,7 @@ from uuid import uuid4
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
-from util import atomic_write_on_tmp
+from util import atomic_write_on_tmp, find_recursive
 from util import get_reference_path, get_opus_path
 from logger import logger
 
@@ -109,9 +108,9 @@ def get_arg_parser():
 def main(argv):
   opts = get_arg_parser().parse_args(argv[1:])
 
-  input_path_prefix = "{}/original/**/".format(opts.data_path)
-  wav_paths = glob.glob("{}/*.wav".format(input_path_prefix), recursive=True)
-  flac_paths = glob.glob("{}/*.flac".format(input_path_prefix), recursive=True)
+  input_path_prefix = "{}/original/".format(opts.data_path)
+  wav_paths = find_recursive(input_path_prefix, "*.wav")
+  flac_paths = find_recursive(input_path_prefix, "*.flac")
   original_paths = wav_paths + flac_paths
   info_for_paths, successes = _get_info_for_paths(opts.data_path, original_paths,
                                                   opts.block_size, opts.overlap)
