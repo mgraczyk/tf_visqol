@@ -3,6 +3,7 @@ import numpy as np
 
 from tf_visqol import TFVisqol, _DTYPE
 
+from tf_util import define_scope
 
 def get_loss(ref, deg, filter_output, fs, n_samples):
   with tf.variable_scope("loss"):
@@ -53,7 +54,6 @@ def lrelu(x):
   return tf.maximum(0.1 * x, x)
 
 def conv_net(deg_var,
-             block_size,
              n_filters=[10, 8, 8, 8, 8, 8, 10, 40, 70],
              filter_sizes=[3, 5, 5, 5, 5, 5, 5, 5, 5],
              strides=[1, 2, 3, 3, 3, 3, 3, 3, 3]):
@@ -118,7 +118,7 @@ def get_simple_model(deg_var, block_size):
     batch_size = deg_var.get_shape().as_list()[0]
 
     x = deg_var
-    x, middle = conv_net(x, block_size)
+    x, middle = conv_net(x)
     # scale = tf.nn.sigmoid(_dense(tf.reshape(middle, (batch_size, -1)), 1))
 
     # Try to drive scale to zero.
