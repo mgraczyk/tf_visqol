@@ -62,7 +62,7 @@ def _get_info_for_paths(data_path, input_paths, block_size, overlap):
       executor.submit(_get_info_for_path, data_path, p, block_size, overlap): p
       for p in input_paths
     }
-    for future in tqdm(concurrent.futures.as_completed(future_to_args)):
+    for future in tqdm(concurrent.futures.as_completed(future_to_args), total=len(input_paths)):
       input_path = future_to_args[future]
       try:
         info_for_path = future.result()
@@ -72,7 +72,7 @@ def _get_info_for_paths(data_path, input_paths, block_size, overlap):
         logger.error("{} generated an exception: ".format(input_path))
         traceback.print_exc()
       else:
-        logger.info("Done with {}".format(input_path))
+        logger.debug("Done with {}".format(input_path))
     return infos, successes
 
 def get_arg_parser():
