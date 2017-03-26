@@ -39,6 +39,7 @@ def log10(x):
   denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
   return numerator / denominator
 
+
 # Adapted from
 #   http://www.mathworks.com/matlabcentral/fileexchange/35103-generalized-goertzel-algorithm/content/goertzel_general_shortened.m
 @define_scope
@@ -116,24 +117,33 @@ def gga_freq_abs(x, sample_rate, freq):
   s2 = s1
   s1 = s0
 
-  for ind in range(2, lx - 1):
-    s0 = x[:, ind, None] + cos_pik_term2 * s1 - s2
+  def cond(ind, *_):
+    return ind < lx - 1
 
-    # We have to tell tensorflow explicitly that the above assignment to s0 happens before the
-    # following assignments.
-    s2 = s1
-    s1 = s0
+  def body(ind, s):
+    s1 = s[0]
+    s2 = s[1]
+    s0 = x[:, ind, None] + cos_pik_term2 * s1 - s2
+    return (ind + 1, (s0, s1))
+
+  _, s = tf.while_loop(
+    cond,
+    body,
+    loop_vars=(tf.constant(2), (s1, s2)),
+    parallel_iterations=1)
+  s1 = s[0]
+  s2 = s[1]
 
   s0 = x[:, lx - 1, None] + cos_pik_term2 * s1 - s2
 
+  # TODO: Figure out why this doesn't work.
   # | s0 - s1 exp(-ip) |
   # | s0 - s1 cos(p) + i s1 sin(p)) |
   # sqrt((s0 - s1 cos(p))^2 + (s1 sin(p))^2)
   # sqrt(s0^2 - 2 s0 s1 cos(p) + s1^2 cos^2(p) + s1^2 sin^2(p))
-  # sqrt(s0^2 - + s1^2 - 2 s0 s1 cos(p))
+  # sqrt(s0^2 + s1^2 - 2 s0 s1 cos(p))
 
-  # TODO: Figure out why this doesn't work.
-  # y = tf.sqrt(tf.square(s0) + tf.square(s1) - (s0*s1)*cos_pik_term2)
+  # y = stable_sqrt(s0**2 + s1**2 - s0*s1*cos_pik_term2)
   y = stable_sqrt((s0 - s1*cos_pik_term)**2 + (s1 * tf.sin(pik_term))**2)
   return y
 
