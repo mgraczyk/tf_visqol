@@ -128,39 +128,38 @@ def get_simple_model(deg_var, block_size):
 
     # Regularize the output so that we learn to be silent when the output is silent.
     # tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(1e-3),
-                                           # [tf.reduce_mean(tf.abs(output), axis=[1])])
+    # [tf.reduce_mean(tf.abs(output), axis=[1])])
     return output
 
 def assertShape(var, shape):
   varshape = var.get_shape()
   assert varshape == shape, "{} != {}".format(varshape, shape)
 
-@define_scope
-def get_baseline_model(deg_var, block_size):
+def get_preprocessed(x, n_filters_pre):
   weights_init = tf.contrib.layers.xavier_initializer()
-  batch_size = deg_var.get_shape().as_list()[0]
-  assertShape(deg_var, (batch_size, block_size))
-
-  
-  deg_var = tf.expand_dims(deg_var, axis=-1)
-  assertShape(deg_var, (batch_size, block_size, 1))
+  batch_size = x.get_shape()[0]
+  block_size = x.get_shape()[1]
 
   # Compute a representation of the input.
   filter_size_pre = 16
-  n_filters_pre = 10
-  x = deg_var
-  with tf.variable_scope("input_conv"):
+  with tf.variable_scope("proc_conv"):
     W = tf.Variable(weights_init((filter_size_pre, 1, n_filters_pre)), name="W")
     b = tf.Variable(tf.zeros([n_filters_pre]), name="b")
     x = tf.nn.conv1d(x, W, 1, "SAME")
     x = tf.nn.bias_add(x, b)
   preprocessed = x
   assertShape(preprocessed, (batch_size, block_size, n_filters_pre))
+  return preprocessed
+
+def get_attention(representation, n_filters_pre):
+  weights_init = tf.contrib.layers.xavier_initializer()
+  batch_size = representation.get_shape()[0]
+  block_size = representation.get_shape()[1]
 
   # Filter the input selectively based on the representation.
-  filter_size_attn = 8
-  n_filters_attn = 20
-  x = deg_var
+  filter_size_attn = 16
+  n_filters_attn = 10
+  x = representation
   with tf.variable_scope("filter_conv"):
     W = tf.Variable(weights_init((filter_size_attn, 1, n_filters_attn)), name="W")
     b = tf.Variable(tf.zeros([n_filters_attn]), name="b")
@@ -180,10 +179,67 @@ def get_baseline_model(deg_var, block_size):
   filter_attention = x
   assertShape(filter_attention, (batch_size, block_size, n_filters_pre))
 
+  return filter_attention
+
+@define_scope
+def get_baseline_model(deg_var, block_size):
+  n_filters_pre = 20
+  batch_size = deg_var.get_shape().as_list()[0]
+  assertShape(deg_var, (batch_size, block_size))
+
+  deg_channels = tf.expand_dims(deg_var, axis=-1)
+  assertShape(deg_channels, (batch_size, block_size, 1))
+
+  with tf.variable_scope("deg_preprocess"):
+    preprocessed = get_preprocessed(deg_channels, n_filters_pre)
+
+  with tf.variable_scope("attention"):
+    filter_attention = get_attention(deg_channels, n_filters_pre)
+
   with tf.variable_scope("apply_attention"):
-    x = tf.einsum("ijk,ijk->ij", preprocessed, filter_attention)
-  assertShape(x, (batch_size, block_size))
+    filtered_signal = tf.einsum("ijk,ijk->ij", preprocessed, filter_attention)
+  assertShape(filtered_signal, (batch_size, block_size))
 
-  output = x
+  # Scale output so it is in the same range.
+  output = 10*filtered_signal
+  return output
 
-  return x
+@define_scope
+def get_noise_filling_model(deg_var, block_size):
+  n_filters_pre = 20
+  batch_size = deg_var.get_shape().as_list()[0]
+  assertShape(deg_var, (batch_size, block_size))
+
+  deg_channels = deg_var[..., None]
+  assertShape(deg_channels, (batch_size, block_size, 1))
+
+  with tf.variable_scope("deg_preprocess"):
+    preprocessed = get_preprocessed(deg_channels, n_filters_pre)
+
+  with tf.variable_scope("deg_attention"):
+    filter_attention = get_attention(deg_channels, n_filters_pre)
+
+  with tf.variable_scope("apply_deg_attention"):
+    filtered_signal = tf.einsum("ijk,ijk->ij", preprocessed, filter_attention)
+  assertShape(filtered_signal, (batch_size, block_size))
+
+  signal_mean, signal_power = tf.nn.moments(deg_var, axes=[1])
+  noise = 0.1 * (tf.sqrt(signal_power[:, None]) * tf.random_normal(
+    tf.shape(deg_var), mean=0.0, stddev=1.0))[..., None]
+
+  noise_filter = tf.constant(np.ones((2, 1, 1), dtype=np.float32) / 2., dtype=_DTYPE)
+  noise = tf.nn.conv1d(noise, noise_filter, 1, "SAME")
+  with tf.variable_scope("noise_preprocess"):
+    noise_preprocessed = get_preprocessed(noise, n_filters_pre)
+
+  with tf.variable_scope("noise_attention"):
+    noise_attention = get_attention(deg_channels, n_filters_pre)
+
+  with tf.variable_scope("apply_noise_attention"):
+    filtered_noise = tf.einsum("ijk,ijk->ij", noise_preprocessed, noise_attention)
+  assertShape(filtered_noise, (batch_size, block_size))
+
+  # Scale output so it is in the same range.
+  output = 10*(filtered_signal + filtered_noise)
+
+  return output

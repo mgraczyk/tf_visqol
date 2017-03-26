@@ -12,8 +12,8 @@ from pathlib import Path
 from queue import Queue
 
 from tf_visqol import _DTYPE
-from simple_model import get_simple_model, get_loss, get_minimize_op
-from simple_model import get_baseline_model
+from simple_model import get_loss, get_minimize_op
+from simple_model import get_noise_filling_model as get_model
 from util import rm_not_exists_ok, mkdirs_exists_ok
 from util import load_index
 from script_util import get_data_script_arg_parser
@@ -104,7 +104,7 @@ def main(argv):
   ref_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="ref")
   deg_var = tf.placeholder(_DTYPE, (_BATCH_SIZE, block_size), name="deg")
 
-  filter_output_var = get_baseline_model(deg_var, block_size)
+  filter_output_var = get_model(deg_var, block_size)
   losses = get_loss(ref_var, deg_var, filter_output_var, _FS, block_size)
   minimize_op, opt = get_minimize_op(losses["loss"])
   grads = opt.compute_gradients(losses["nsim"])
