@@ -24,7 +24,7 @@ from logger import logger
 _RANDOM_SEED = 42
 tf.set_random_seed(_RANDOM_SEED)
 
-_BATCH_SIZE = 32
+_BATCH_SIZE = 64
 _FS = 16000
 
 def load_data_forever(data_path, index, indices, train_data_queue):
@@ -135,7 +135,7 @@ def main(argv):
       if np.isnan(norm):
         import pdb;     pdb.set_trace()
 
-      if i > 0 and i % 100 == 0:
+      if i > 0 and i % 200 == 0:
         checkpoint_path = Path(training_path, "checkpoint/", "{}.ckpt".format(i))
         mkdirs_exists_ok(str(checkpoint_path.parent))
         save_path = saver.save(sess, str(checkpoint_path))
